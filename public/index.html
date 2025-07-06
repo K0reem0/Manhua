@@ -1,0 +1,995 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>مانهوا بوكس - مكتبة المانهوا العربية</title>
+    <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        :root {
+            --primary: #ff6b6b;
+            --secondary: #794afa;
+            --dark: #1e1e24;
+            --light: #f7f7f7;
+            --dark-mode: #121212;
+            --card-bg: rgba(30, 30, 36, 0.8);
+        }
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Tajawal', sans-serif;
+        }
+
+        body {
+            background-color: var(--dark);
+            color: var(--light);
+            overflow-x: hidden;
+            position: relative;
+            min-height: 100vh;
+            transition: background-color 0.3s;
+        }
+
+        body.dark-mode {
+            background-color: var(--dark-mode);
+            --card-bg: rgba(40, 40, 48, 0.8);
+        }
+
+        /* تأثير أوراق الساكورا */
+        .sakura {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: -1;
+        }
+
+        .sakura img {
+            position: absolute;
+            width: 30px;
+            height: 30px;
+            animation: falling linear infinite;
+            opacity: 0.7;
+        }
+
+        @keyframes falling {
+            0% {
+                transform: translate(0, -10%) rotate(0deg);
+            }
+            100% {
+                transform: translate(calc(var(--random-x) * 100vw), 100vh) rotate(360deg);
+            }
+        }
+
+        /* الهيدر */
+        header {
+            background: rgba(30, 30, 36, 0.8);
+            backdrop-filter: blur(10px);
+            padding: 1rem 2rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            box-shadow: 0 5px 20px rgba(0, 0, 0, 0.3);
+        }
+
+        .logo {
+            font-size: 1.8rem;
+            font-weight: 700;
+            color: var(--primary);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .logo span {
+            color: var(--light);
+        }
+
+        .header-controls {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+
+        .view-toggle, .theme-toggle {
+            background: rgba(121, 74, 250, 0.2);
+            border: 1px solid var(--secondary);
+            color: white;
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .view-toggle:hover, .theme-toggle:hover {
+            background: var(--secondary);
+            transform: scale(1.1);
+        }
+
+        /* التصنيفات */
+        .categories {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            padding: 1rem 2rem;
+            background: rgba(30, 30, 36, 0.6);
+            transition: background-color 0.3s;
+        }
+
+        body.dark-mode .categories {
+            background: rgba(40, 40, 48, 0.6);
+        }
+
+        .category-btn {
+            background: rgba(121, 74, 250, 0.2);
+            color: white;
+            border: 1px solid var(--secondary);
+            border-radius: 20px;
+            padding: 0.5rem 1rem;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .category-btn:hover {
+            background: var(--secondary);
+        }
+
+        .category-btn.active {
+            background: var(--secondary);
+            box-shadow: 0 0 0 2px white;
+        }
+
+        .category-btn.multi-selected {
+            background: var(--primary);
+            border-color: var(--primary);
+        }
+
+        /* الفلاتر */
+        .filters {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 20px;
+            padding: 1rem 2rem;
+            align-items: center;
+        }
+
+        .filter-group {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .filter-label {
+            font-weight: 500;
+        }
+
+        .filter-input {
+            padding: 0.5rem;
+            border: none;
+            border-radius: 5px;
+            background: rgba(255, 255, 255, 0.1);
+            color: white;
+        }
+
+        /* نتائج المانهوا */
+        .results {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+            gap: 2rem;
+            padding: 2rem;
+        }
+
+        .results.compact-view {
+            grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+            gap: 1rem;
+        }
+
+        .results.detailed-view {
+            grid-template-columns: 1fr;
+            gap: 1.5rem;
+        }
+
+        .manhwa-card {
+            background: var(--card-bg);
+            border-radius: 10px;
+            overflow: hidden;
+            transition: all 0.3s;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+            cursor: pointer;
+        }
+
+        .compact-view .manhwa-card {
+            border-radius: 8px;
+        }
+
+        .detailed-view .manhwa-card {
+            display: flex;
+            flex-direction: row;
+            max-height: 200px;
+        }
+
+        .manhwa-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.3);
+        }
+
+        .manhwa-cover {
+            width: 100%;
+            height: 350px;
+            object-fit: cover;
+            transition: all 0.3s;
+        }
+
+        .compact-view .manhwa-cover {
+            height: 250px;
+        }
+
+        .detailed-view .manhwa-cover {
+            width: 150px;
+            height: 200px;
+            border-radius: 5px 0 0 5px;
+        }
+
+        .manhwa-info {
+            padding: 1rem;
+            transition: all 0.3s;
+        }
+
+        .compact-view .manhwa-info {
+            padding: 0.8rem;
+        }
+
+        .detailed-view .manhwa-info {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+        }
+
+        .manhwa-title {
+            font-size: 1.2rem;
+            margin-bottom: 0.5rem;
+            font-weight: 700;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .compact-view .manhwa-title {
+            font-size: 1rem;
+        }
+
+        .detailed-view .manhwa-title {
+            white-space: normal;
+            font-size: 1.4rem;
+        }
+
+        .manhwa-description {
+            display: none;
+        }
+
+        .detailed-view .manhwa-description {
+            display: -webkit-box;
+            -webkit-line-clamp: 3;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+            font-size: 0.9rem;
+            line-height: 1.4;
+            color: #ccc;
+        }
+
+        .manhwa-meta {
+            display: flex;
+            justify-content: space-between;
+            color: #aaa;
+            font-size: 0.9rem;
+        }
+
+        .compact-view .manhwa-meta {
+            font-size: 0.8rem;
+        }
+
+        .detailed-view .manhwa-meta {
+            justify-content: flex-start;
+            gap: 15px;
+        }
+
+        /* تفاصيل المانهوا */
+        .manhwa-detail {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.9);
+            z-index: 1000;
+            display: none;
+            overflow-y: auto;
+            padding: 2rem;
+        }
+
+        .detail-container {
+            max-width: 1000px;
+            margin: 0 auto;
+            background: var(--dark);
+            border-radius: 10px;
+            overflow: hidden;
+            box-shadow: 0 0 30px rgba(0, 0, 0, 0.5);
+        }
+
+        .detail-header {
+            display: flex;
+            gap: 2rem;
+            padding: 2rem;
+        }
+
+        .detail-cover {
+            width: 250px;
+            height: 350px;
+            object-fit: cover;
+            border-radius: 5px;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+        }
+
+        .detail-title {
+            font-size: 2rem;
+            margin-bottom: 1rem;
+            color: var(--primary);
+        }
+
+        .detail-meta {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 1rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .meta-item {
+            background: rgba(121, 74, 250, 0.2);
+            padding: 0.5rem 1rem;
+            border-radius: 5px;
+            font-size: 0.9rem;
+        }
+
+        .detail-description {
+            line-height: 1.6;
+            margin-bottom: 1.5rem;
+        }
+
+        .close-btn {
+            position: absolute;
+            top: 2rem;
+            left: 2rem;
+            background: var(--primary);
+            color: white;
+            border: none;
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            font-size: 1.2rem;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        /* التكيف مع الشاشات الصغيرة */
+        @media (max-width: 768px) {
+            header {
+                flex-direction: column;
+                gap: 1rem;
+                padding: 1rem;
+            }
+
+            .header-controls {
+                width: 100%;
+                justify-content: flex-end;
+            }
+
+            .categories, .filters {
+                padding: 1rem;
+            }
+
+            .filters {
+                gap: 10px;
+            }
+
+            .filter-group {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 5px;
+            }
+
+            .results {
+                grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+                padding: 1rem;
+                gap: 1rem;
+            }
+
+            .compact-view {
+                grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)) !important;
+            }
+
+            .detailed-view .manhwa-card {
+                flex-direction: column;
+                max-height: none;
+            }
+
+            .detailed-view .manhwa-cover {
+                width: 100%;
+                height: 250px;
+                border-radius: 5px 5px 0 0;
+            }
+
+            .detail-header {
+                flex-direction: column;
+                padding: 1rem;
+            }
+
+            .detail-cover {
+                width: 100%;
+                height: auto;
+                max-height: 400px;
+            }
+        }
+
+        /* مؤشر التحميل */
+        .loader {
+            display: none;
+            border: 5px solid #f3f3f3;
+            border-top: 5px solid var(--primary);
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            animation: spin 1s linear infinite;
+            margin: 2rem auto;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        /* زر تحميل المزيد */
+        .load-more-btn-container {
+            text-align: center;
+            padding: 1rem 0 2rem;
+        }
+
+        .load-more-btn {
+            background: var(--secondary);
+            color: white;
+            border: none;
+            border-radius: 30px;
+            padding: 0.8rem 2rem;
+            cursor: pointer;
+            font-weight: 500;
+            font-size: 1.1rem;
+            transition: all 0.3s;
+        }
+
+        .load-more-btn:hover {
+            background: #6a3eda;
+            transform: translateY(-2px);
+        }
+    </style>
+</head>
+<body>
+    <div class="sakura" id="sakura-container"></div>
+    <header>
+        <div class="logo">
+            <span>مانهوا</span>بوكس
+        </div>
+        <div class="header-controls">
+            <div class="view-toggle" id="view-toggle" title="تغيير طريقة العرض">
+                <i class="fas fa-th"></i>
+            </div>
+            <div class="theme-toggle" id="theme-toggle" title="تبديل الوضع الليلي">
+                <i class="fas fa-moon"></i>
+            </div>
+        </div>
+    </header>
+
+    <div class="categories" id="categories-container">
+    </div>
+
+    <div class="filters">
+        <div class="filter-group">
+            <span class="filter-label">الحد الأدنى للفصول:</span>
+            <input type="number" class="filter-input" id="chapters-min" placeholder="الحد الأدنى" min="0">
+        </div>
+        <div class="filter-group">
+            <span class="filter-label">حالة العمل:</span>
+            <select class="filter-input" id="status-filter">
+                <option value="all">الكل</option>
+                <option value="ongoing">مستمر</option>
+                <option value="completed">مكتمل</option>
+                <option value="hiatus">متوقف</option>
+                <option value="cancelled">ملغى</option>
+            </select>
+        </div>
+        <div class="filter-group">
+            <span class="filter-label">التصنيف العمري:</span>
+            <select class="filter-input" id="content-rating-filter">
+                <option value="all">الكل</option>
+                <option value="safe">آمن (Safe)</option>
+                <option value="suggestive">مقترح (Suggestive)</option>
+                <option value="erotica">إثارة (Erotica)</option>
+                <option value="pornographic">إباحي (Pornographic)</option>
+            </select>
+        </div>
+        <div class="filter-group">
+            <span class="filter-label">الفئة:</span>
+            <select class="filter-input" id="demographic-filter">
+                <option value="all">الكل</option>
+                <option value="shounen">شونين (Shounen)</option>
+                <option value="shoujo">شوجو (Shoujo)</option>
+                <option value="josei">جوسي (Josei)</option>
+                <option value="seinen">سينين (Seinen)</option>
+                <option value="none">لا شيء (None)</option>
+            </select>
+        </div>
+    </div>
+
+    <div class="loader" id="loader"></div>
+
+    <div class="results" id="results-container">
+    </div>
+
+    <div class="load-more-btn-container" id="load-more-container">
+        <button class="load-more-btn" id="load-more-btn" style="display: none;">تحميل المزيد</button>
+    </div>
+
+    <div class="manhwa-detail" id="manhwa-detail">
+        <button class="close-btn" id="close-detail">×</button>
+        <div class="detail-container">
+            <div class="detail-header">
+                <img src="" alt="Manhwa Cover" class="detail-cover" id="detail-cover">
+                <div class="detail-content">
+                    <h1 class="detail-title" id="detail-title"></h1>
+                    <div class="detail-meta" id="detail-meta"></div>
+                    <p class="detail-description" id="detail-description"></p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const MANGADEX_API_URL = "https://api.mangadex.org";
+        let mangadexGenreTags = {}; // Stores { genreName.toLowerCase(): tagId }
+        let currentManhwaResults = []; // Stores currently displayed manhwa
+        let currentOffset = 0; // Current offset for pagination
+        const limitPerPage = 100; // Number of results per page (MangaDex max limit is 100 per request)
+        let hasMoreResults = true; // Flag to indicate if more results are available
+        let selectedGenres = []; // Array to store multiple selected genres
+        let currentViewMode = 'grid'; // 'grid', 'compact', 'detailed'
+
+        function createSakura() {
+            const container = document.getElementById('sakura-container');
+            const sakuraCount = 20;
+            for (let i = 0; i < sakuraCount; i++) {
+                const sakura = document.createElement('img');
+                sakura.src = 'https://static.vecteezy.com/system/resources/previews/054/306/786/non_2x/soft-and-vibrant-cherry-blossom-petal-clipart-for-designs-free-png.png';
+                const randomX = Math.random();
+                const randomDelay = Math.random() * 5;
+                const randomDuration = 10 + Math.random() * 20;
+                const randomSize = 20 + Math.random() * 20;
+                sakura.style.left = `${randomX * 100}%`;
+                sakura.style.top = `-30px`;
+                sakura.style.width = `${randomSize}px`;
+                sakura.style.height = `${randomSize}px`;
+                sakura.style.animationDelay = `${randomDelay}s`;
+                sakura.style.animationDuration = `${randomDuration}s`;
+                sakura.style.setProperty('--random-x', randomX);
+                container.appendChild(sakura);
+            }
+        }
+
+        function updateViewMode() {
+            const resultsContainer = document.getElementById('results-container');
+            resultsContainer.className = 'results';
+            
+            if (currentViewMode === 'compact') {
+                resultsContainer.classList.add('compact-view');
+                document.getElementById('view-toggle').innerHTML = '<i class="fas fa-list"></i>';
+            } else if (currentViewMode === 'detailed') {
+                resultsContainer.classList.add('detailed-view');
+                document.getElementById('view-toggle').innerHTML = '<i class="fas fa-th-large"></i>';
+            } else {
+                document.getElementById('view-toggle').innerHTML = '<i class="fas fa-th"></i>';
+            }
+            
+            // Re-display current results to apply new view mode
+            displayManhwa(currentManhwaResults, false);
+        }
+
+        function toggleDarkMode() {
+            document.body.classList.toggle('dark-mode');
+            const isDark = document.body.classList.contains('dark-mode');
+            document.getElementById('theme-toggle').innerHTML = isDark ? '<i class="fas fa-sun"></i>' : '<i class="fas fa-moon"></i>';
+            localStorage.setItem('darkMode', isDark);
+        }
+
+        // Modified to append new results or clear existing ones
+        function displayManhwa(manhwaList, append = false) {
+            const container = document.getElementById('results-container');
+            if (!append) {
+                container.innerHTML = ''; // Clear only if not appending
+            }
+
+            if (!manhwaList || manhwaList.length === 0) {
+                if (!append) { // Show "no results" only if it's the initial load or no results from first page
+                    container.innerHTML = '<p style="grid-column: 1/-1; text-align: center;">لا توجد نتائج متطابقة</p>';
+                }
+                document.getElementById('load-more-btn').style.display = 'none'; // Hide load more button
+                return;
+            }
+
+            manhwaList.forEach(manhwa => {
+                const card = document.createElement('div');
+                card.className = 'manhwa-card';
+                
+                let cardHTML = `
+                    <img src="${manhwa.cover || 'https://via.placeholder.com/250x350?text=No+Cover'}" alt="${manhwa.title}" class="manhwa-cover">
+                    <div class="manhwa-info">
+                        <h3 class="manhwa-title">${manhwa.title}</h3>
+                        <div class="manhwa-meta">
+                            <span>${manhwa.chapters || '?'} فصل</span>
+                            <span>${manhwa.rating ? manhwa.rating + ' ★' : ''}</span>
+                        </div>
+                `;
+                
+                if (currentViewMode === 'detailed') {
+                    cardHTML += `
+                        <p class="manhwa-description">${manhwa.description || 'لا يوجد وصف متاح'}</p>
+                    `;
+                }
+                
+                cardHTML += `</div>`;
+                card.innerHTML = cardHTML;
+                
+                card.addEventListener('click', () => showManhwaDetail(manhwa));
+                container.appendChild(card);
+            });
+            
+            // Show load more button if there are more results expected
+            if (hasMoreResults) {
+                document.getElementById('load-more-btn').style.display = 'block';
+            } else {
+                document.getElementById('load-more-btn').style.display = 'none';
+            }
+        }
+
+        function showManhwaDetail(manhwa) {
+            const detail = document.getElementById('manhwa-detail');
+            const cover = document.getElementById('detail-cover');
+            const title = document.getElementById('detail-title');
+            const meta = document.getElementById('detail-meta');
+            const description = document.getElementById('detail-description');
+
+            cover.src = manhwa.cover || 'https://via.placeholder.com/250x350?text=No+Cover';
+            title.textContent = manhwa.title || 'لا يوجد عنوان';
+
+            let metaHTML = '';
+            if (manhwa.chapters && manhwa.chapters !== 'غير معروف') metaHTML += `<div class="meta-item">${manhwa.chapters} فصول</div>`;
+            if (manhwa.status) metaHTML += `<div class="meta-item">${manhwa.status}</div>`;
+            if (manhwa.rating) metaHTML += `<div class="meta-item">${manhwa.rating} ★</div>`;
+            if (manhwa.genres && manhwa.genres.length > 0) {
+                metaHTML += manhwa.genres.map(genre => `<div class="meta-item">${genre}</div>`).join('');
+            }
+            if (manhwa.demographic && manhwa.demographic !== 'none') metaHTML += `<div class="meta-item">${manhwa.demographic}</div>`;
+            if (manhwa.contentRating && manhwa.contentRating !== 'safe') metaHTML += `<div class="meta-item">${manhwa.contentRating}</div>`;
+
+            meta.innerHTML = metaHTML;
+            description.textContent = manhwa.description || 'لا يوجد وصف متاح';
+            detail.style.display = 'block';
+            document.body.style.overflow = 'hidden';
+        }
+
+        // جلب التصنيفات من MangaDex وملء أزرار التصنيف
+        async function populateCategories() {
+            const categoriesContainer = document.getElementById('categories-container');
+            categoriesContainer.innerHTML = '';
+            document.getElementById('loader').style.display = 'block';
+
+            try {
+                const response = await fetch(`${MANGADEX_API_URL}/manga/tag`);
+                if (!response.ok) {
+                    throw new Error(`HTTP error! Status: ${response.status}`);
+                }
+                const data = await response.json();
+
+                const allBtn = document.createElement('button');
+                allBtn.className = 'category-btn active';
+                allBtn.dataset.category = 'all';
+                allBtn.textContent = 'الكل';
+                categoriesContainer.appendChild(allBtn);
+
+                allBtn.addEventListener('click', () => {
+                    selectedGenres = [];
+                    document.querySelectorAll('.category-btn').forEach(btn => {
+                        btn.classList.remove('active', 'multi-selected');
+                    });
+                    allBtn.classList.add('active');
+                    resetAndFetchManhwa();
+                });
+                
+                if (data.data && Array.isArray(data.data)) {
+                    const uniqueGenres = new Set();
+                    data.data.forEach(tag => {
+                        if (tag.attributes && tag.attributes.group === 'genre' && tag.attributes.name && tag.attributes.name.en) {
+                            const genreName = tag.attributes.name.en;
+                            uniqueGenres.add(genreName);
+                            mangadexGenreTags[genreName.toLowerCase()] = tag.id;
+                        }
+                    });
+
+                    Array.from(uniqueGenres).sort().forEach(genre => {
+                        const btn = document.createElement('button');
+                        btn.className = 'category-btn';
+                        btn.dataset.category = genre.toLowerCase();
+                        btn.textContent = genre;
+                        categoriesContainer.appendChild(btn);
+
+                        btn.addEventListener('click', (e) => {
+                            const genreName = btn.dataset.category;
+                            
+                            // If "All" is active, deactivate it
+                            document.querySelector('.category-btn[data-category="all"]').classList.remove('active');
+                            
+                            // Toggle selection
+                            if (btn.classList.contains('multi-selected')) {
+                                btn.classList.remove('multi-selected');
+                                selectedGenres = selectedGenres.filter(g => g !== genreName);
+                            } else {
+                                btn.classList.add('multi-selected');
+                                selectedGenres.push(genreName);
+                            }
+                            
+                            // If no genres selected, activate "All"
+                            if (selectedGenres.length === 0) {
+                                document.querySelector('.category-btn[data-category="all"]').classList.add('active');
+                            }
+                            
+                            resetAndFetchManhwa();
+                        });
+                    });
+                } else {
+                    console.warn('MangaDex tag API response did not contain expected data.data array.');
+                    categoriesContainer.innerHTML += '<p style="color: yellow;">تعذر تحميل بعض التصنيفات.</p>';
+                }
+            } catch (error) {
+                console.error('Error populating categories:', error);
+                categoriesContainer.innerHTML = '<p style="color: red; font-weight: bold;">خطأ: تعذر تحميل التصنيفات من MangaDex. يرجى التحقق من اتصالك بالإنترنت أو المحاولة لاحقاً.</p>';
+            } finally {
+                document.getElementById('loader').style.display = 'none';
+            }
+        }
+
+        // دالة لجلب المانهوا من MangaDex API وتطبيق الفلاتر مع pagination
+        async function fetchAndFilterManhwa(append = false) {
+            document.getElementById('loader').style.display = 'block';
+            
+            // If not appending, clear current results and reset offset
+            if (!append) {
+                currentManhwaResults = [];
+                currentOffset = 0;
+                document.getElementById('results-container').innerHTML = ''; // Clear DOM immediately
+            }
+
+            try {
+                const minChapters = parseInt(document.getElementById('chapters-min').value) || 0;
+                const statusFilter = document.getElementById('status-filter').value;
+                const contentRatingFilter = document.getElementById('content-rating-filter').value;
+                const demographicFilter = document.getElementById('demographic-filter').value;
+
+                let params = {
+                    limit: limitPerPage,
+                    offset: currentOffset, // Apply offset for pagination
+                    'order[followedCount]': 'desc',
+                    'includes[]': 'cover_art'
+                };
+
+                // Handle multiple genre selection
+                if (selectedGenres.length > 0) {
+                    const genreTagIds = selectedGenres
+                        .map(genre => mangadexGenreTags[genre])
+                        .filter(Boolean); // Remove undefined
+                    
+                    if (genreTagIds.length > 0) {
+                        params['includedTags[]'] = genreTagIds;
+                    }
+                }
+
+                if (statusFilter !== 'all') {
+                    params['status[]'] = [statusFilter];
+                }
+
+                if (contentRatingFilter !== 'all') {
+                    params['contentRating[]'] = [contentRatingFilter];
+                }
+
+                if (demographicFilter !== 'all') {
+                    params['publicationDemographic[]'] = [demographicFilter];
+                }
+                
+                const urlParams = new URLSearchParams();
+                for (const key in params) {
+                    if (Array.isArray(params[key])) {
+                        params[key].forEach(value => urlParams.append(key, value));
+                    } else {
+                        urlParams.append(key, params[key]);
+                    }
+                }
+                
+                const response = await fetch(`${MANGADEX_API_URL}/manga?${urlParams.toString()}`);
+                if (!response.ok) {
+                    throw new Error(`MangaDex fetch error! Status: ${response.status}`);
+                }
+                const data = await response.json();
+
+                let fetchedManhwa = [];
+                if (data.data && Array.isArray(data.data)) {
+                    fetchedManhwa = await Promise.all(data.data.map(async manga => {
+                        let chapters = 'غير معروف';
+                        try {
+                            const aggregateResponse = await fetch(`${MANGADEX_API_URL}/manga/${manga.id}/aggregate?translatedLanguage[]=en`);
+                            if (aggregateResponse.ok) {
+                                const aggregateData = await aggregateResponse.json();
+                                if (aggregateData.volumes) {
+                                    let maxChapter = 0;
+                                    for (const vol in aggregateData.volumes) {
+                                        for (const chap in aggregateData.volumes[vol].chapters) {
+                                            const chapterNum = parseFloat(aggregateData.volumes[vol].chapters[chap].chapter);
+                                            if (!isNaN(chapterNum) && chapterNum > maxChapter) {
+                                                maxChapter = chapterNum;
+                                            }
+                                        }
+                                    }
+                                    chapters = maxChapter > 0 ? maxChapter.toString() : 'غير معروف';
+                                }
+                            }
+                        } catch (e) {
+                            console.warn(`Could not fetch chapters for ${manga.id}:`, e);
+                        }
+
+                        let coverUrl = 'https://via.placeholder.com/250x350?text=No+Cover';
+                        const coverArt = manga.relationships.find(r => r.type === 'cover_art');
+                        if (coverArt) {
+                            coverUrl = `https://uploads.mangadex.org/covers/${manga.id}/${coverArt.attributes.fileName}.256.jpg`;
+                        }
+
+                        const genres = [];
+                        const demographic = manga.attributes.publicationDemographic || 'none';
+                        const contentRating = manga.attributes.contentRating || 'safe';
+
+                        if (manga.attributes.tags) {
+                            manga.attributes.tags.forEach(tag => {
+                                if (tag.attributes && tag.attributes.group === 'genre' && tag.attributes.name && tag.attributes.name.en) {
+                                    genres.push(tag.attributes.name.en);
+                                }
+                            });
+                        }
+
+                        return {
+                            id: manga.id,
+                            title: manga.attributes.title.en || Object.values(manga.attributes.title)[0] || 'Unknown Title',
+                            cover: coverUrl,
+                            chapters: chapters,
+                            status: manga.attributes.status,
+                            genres: genres,
+                            rating: manga.attributes.averageRating ? (parseFloat(manga.attributes.averageRating) / 10).toFixed(1) : null,
+                            description: manga.attributes.description?.en || 'لا يوجد وصف متاح',
+                            source: 'MangaDex',
+                            url: `https://mangadex.org/title/${manga.id}`,
+                            demographic: demographic,
+                            contentRating: contentRating
+                        };
+                    }));
+                }
+
+                // Apply local filter for minimum chapters
+                const filteredLocally = fetchedManhwa.filter(manhwa => {
+                    const chaptersNum = parseInt(manhwa.chapters);
+                    return (manhwa.chapters !== 'غير معروف' && !isNaN(chaptersNum) && chaptersNum >= minChapters);
+                });
+                
+                // Filter out duplicates by ID
+                const uniqueManhwa = filteredLocally.filter(newManhwa => 
+                    !currentManhwaResults.some(existingManhwa => existingManhwa.id === newManhwa.id)
+                );
+                
+                // Add new results to global array
+                currentManhwaResults = currentManhwaResults.concat(uniqueManhwa);
+
+                // Update offset for next request
+                currentOffset += data.data.length; // MangaDex total results is in data.total
+
+                // Check if there are more results available from the API
+                hasMoreResults = data.total > currentOffset;
+
+                displayManhwa(uniqueManhwa, true); // Append new results
+            } catch (error) {
+                console.error('Error fetching manhwa from MangaDex:', error);
+                document.getElementById('results-container').innerHTML = '<p style="grid-column: 1/-1; text-align: center; color: red; font-weight: bold;">حدث خطأ أثناء جلب المانهوا من MangaDex. يرجى المحاولة لاحقاً.</p>';
+                hasMoreResults = false; // Assume no more results on error
+                document.getElementById('load-more-btn').style.display = 'none'; // Hide button on error
+            } finally {
+                document.getElementById('loader').style.display = 'none';
+            }
+        }
+
+        // Function to reset pagination and fetch new results
+        function resetAndFetchManhwa() {
+            currentOffset = 0;
+            currentManhwaResults = [];
+            hasMoreResults = true;
+            document.getElementById('load-more-btn').style.display = 'none'; // Hide until first fetch completes
+            fetchAndFilterManhwa(false); // Do not append, start fresh
+        }
+
+        function cycleViewMode() {
+            if (currentViewMode === 'grid') {
+                currentViewMode = 'compact';
+            } else if (currentViewMode === 'compact') {
+                currentViewMode = 'detailed';
+            } else {
+                currentViewMode = 'grid';
+            }
+            localStorage.setItem('viewMode', currentViewMode);
+            updateViewMode();
+        }
+
+        document.addEventListener('DOMContentLoaded', async () => {
+            createSakura();
+            
+            // Load saved preferences
+            if (localStorage.getItem('darkMode') === 'true') {
+                document.body.classList.add('dark-mode');
+                document.getElementById('theme-toggle').innerHTML = '<i class="fas fa-sun"></i>';
+            }
+            
+            const savedViewMode = localStorage.getItem('viewMode');
+            if (savedViewMode) {
+                currentViewMode = savedViewMode;
+            }
+            
+            await populateCategories(); // First, get and display categories
+            resetAndFetchManhwa(); // Initial fetch on page load
+            updateViewMode(); // Apply saved view mode
+
+            document.getElementById('close-detail').addEventListener('click', () => {
+                document.getElementById('manhwa-detail').style.display = 'none';
+                document.body.style.overflow = 'auto';
+            });
+
+            // Event listeners for filter changes
+            document.getElementById('chapters-min').addEventListener('input', resetAndFetchManhwa);
+            document.getElementById('status-filter').addEventListener('change', resetAndFetchManhwa);
+            document.getElementById('content-rating-filter').addEventListener('change', resetAndFetchManhwa);
+            document.getElementById('demographic-filter').addEventListener('change', resetAndFetchManhwa);
+
+            // Event listener for Load More button
+            document.getElementById('load-more-btn').addEventListener('click', () => {
+                fetchAndFilterManhwa(true); // Append new results
+            });
+            
+            // View mode toggle
+            document.getElementById('view-toggle').addEventListener('click', cycleViewMode);
+            
+            // Dark mode toggle
+            document.getElementById('theme-toggle').addEventListener('click', toggleDarkMode);
+        });
+    </script>
+</body>
+</html>
