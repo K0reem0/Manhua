@@ -124,6 +124,8 @@
             padding: 1rem 2rem;
             background: rgba(30, 30, 36, 0.6);
             transition: background-color 0.3s;
+            max-height: 200px;
+            overflow-y: auto;
         }
 
         body.dark-mode .categories {
@@ -138,6 +140,7 @@
             padding: 0.5rem 1rem;
             cursor: pointer;
             transition: all 0.3s;
+            flex-shrink: 0;
         }
 
         .category-btn:hover {
@@ -564,9 +567,11 @@
         </div>
     </div>
 
+    <!-- ملف التصنيفات -->
+    <script src="tags.js"></script>
+
     <script>
-        const MANGADEX_API_URL = "https://api.mangadex.org";
-        let mangadexGenreTags = {}; // Stores { genreName.toLowerCase(): tagId }
+        const PROXY_API_URL = "https://manhua-fa401fa1e191.herokuapp.com/api";
         let currentManhwaResults = []; // Stores currently displayed manhwa
         let currentOffset = 0; // Current offset for pagination
         const limitPerPage = 100; // Number of results per page (MangaDex max limit is 100 per request)
@@ -620,7 +625,6 @@
             localStorage.setItem('darkMode', isDark);
         }
 
-        // Modified to append new results or clear existing ones
         function displayManhwa(manhwaList, append = false) {
             const container = document.getElementById('results-container');
             if (!append) {
@@ -628,10 +632,10 @@
             }
 
             if (!manhwaList || manhwaList.length === 0) {
-                if (!append) { // Show "no results" only if it's the initial load or no results from first page
+                if (!append) {
                     container.innerHTML = '<p style="grid-column: 1/-1; text-align: center;">لا توجد نتائج متطابقة</p>';
                 }
-                document.getElementById('load-more-btn').style.display = 'none'; // Hide load more button
+                document.getElementById('load-more-btn').style.display = 'none';
                 return;
             }
 
@@ -662,7 +666,6 @@
                 container.appendChild(card);
             });
             
-            // Show load more button if there are more results expected
             if (hasMoreResults) {
                 document.getElementById('load-more-btn').style.display = 'block';
             } else {
@@ -696,95 +699,77 @@
             document.body.style.overflow = 'hidden';
         }
 
-        // جلب التصنيفات من MangaDex وملء أزرار التصنيف
-        async function populateCategories() {
+        function populateCategories() {
             const categoriesContainer = document.getElementById('categories-container');
             categoriesContainer.innerHTML = '';
-            document.getElementById('loader').style.display = 'block';
+            
+            // إنشاء زر "الكل"
+            const allBtn = document.createElement('button');
+            allBtn.className = 'category-btn active';
+            allBtn.dataset.category = 'all';
+            allBtn.textContent = 'الكل';
+            categoriesContainer.appendChild(allBtn);
 
-            try {
-                const response = await fetch(`${MANGADEX_API_URL}/manga/tag`);
-                if (!response.ok) {
-                    throw new Error(`HTTP error! Status: ${response.status}`);
-                }
-                const data = await response.json();
-
-                const allBtn = document.createElement('button');
-                allBtn.className = 'category-btn active';
-                allBtn.dataset.category = 'all';
-                allBtn.textContent = 'الكل';
-                categoriesContainer.appendChild(allBtn);
-
-                allBtn.addEventListener('click', () => {
-                    selectedGenres = [];
-                    document.querySelectorAll('.category-btn').forEach(btn => {
-                        btn.classList.remove('active', 'multi-selected');
-                    });
-                    allBtn.classList.add('active');
-                    resetAndFetchManhwa();
+            allBtn.addEventListener('click', () => {
+                selectedGenres = [];
+                document.querySelectorAll('.category-btn').forEach(btn => {
+                    btn.classList.remove('active', 'multi-selected');
                 });
+                allBtn.classList.add('active');
+                resetAndFetchManhwa();
+            });
+            
+            // إضافة التصنيفات من ملف tags.js
+            Object.entries(mangaTags).forEach(([group, tags]) => {
+                // إضافة عنوان المجموعة
+                const groupHeader = document.createElement('h3');
+                groupHeader.textContent = group === 'genre' ? 'أنواع' : 
+                                        group === 'theme' ? 'مواضيع' : 
+                                        group === 'format' ? 'صيغ' : 
+                                        group === 'content' ? 'محتوى' : group;
+                groupHeader.style.color = 'var(--primary)';
+                groupHeader.style.margin = '10px 0 5px';
+                groupHeader.style.width = '100%';
+                categoriesContainer.appendChild(groupHeader);
                 
-                if (data.data && Array.isArray(data.data)) {
-                    const uniqueGenres = new Set();
-                    data.data.forEach(tag => {
-                        if (tag.attributes && tag.attributes.group === 'genre' && tag.attributes.name && tag.attributes.name.en) {
-                            const genreName = tag.attributes.name.en;
-                            uniqueGenres.add(genreName);
-                            mangadexGenreTags[genreName.toLowerCase()] = tag.id;
+                // إضافة التصنيفات
+                tags.forEach(tag => {
+                    const btn = document.createElement('button');
+                    btn.className = 'category-btn';
+                    btn.dataset.category = tag.name.en.toLowerCase();
+                    btn.textContent = tag.name.en;
+                    categoriesContainer.appendChild(btn);
+
+                    btn.addEventListener('click', (e) => {
+                        const genreName = btn.dataset.category;
+                        
+                        document.querySelector('.category-btn[data-category="all"]').classList.remove('active');
+                        
+                        if (btn.classList.contains('multi-selected')) {
+                            btn.classList.remove('multi-selected');
+                            selectedGenres = selectedGenres.filter(g => g !== genreName);
+                        } else {
+                            btn.classList.add('multi-selected');
+                            selectedGenres.push(genreName);
                         }
+                        
+                        if (selectedGenres.length === 0) {
+                            document.querySelector('.category-btn[data-category="all"]').classList.add('active');
+                        }
+                        
+                        resetAndFetchManhwa();
                     });
-
-                    Array.from(uniqueGenres).sort().forEach(genre => {
-                        const btn = document.createElement('button');
-                        btn.className = 'category-btn';
-                        btn.dataset.category = genre.toLowerCase();
-                        btn.textContent = genre;
-                        categoriesContainer.appendChild(btn);
-
-                        btn.addEventListener('click', (e) => {
-                            const genreName = btn.dataset.category;
-                            
-                            // If "All" is active, deactivate it
-                            document.querySelector('.category-btn[data-category="all"]').classList.remove('active');
-                            
-                            // Toggle selection
-                            if (btn.classList.contains('multi-selected')) {
-                                btn.classList.remove('multi-selected');
-                                selectedGenres = selectedGenres.filter(g => g !== genreName);
-                            } else {
-                                btn.classList.add('multi-selected');
-                                selectedGenres.push(genreName);
-                            }
-                            
-                            // If no genres selected, activate "All"
-                            if (selectedGenres.length === 0) {
-                                document.querySelector('.category-btn[data-category="all"]').classList.add('active');
-                            }
-                            
-                            resetAndFetchManhwa();
-                        });
-                    });
-                } else {
-                    console.warn('MangaDex tag API response did not contain expected data.data array.');
-                    categoriesContainer.innerHTML += '<p style="color: yellow;">تعذر تحميل بعض التصنيفات.</p>';
-                }
-            } catch (error) {
-                console.error('Error populating categories:', error);
-                categoriesContainer.innerHTML = '<p style="color: red; font-weight: bold;">خطأ: تعذر تحميل التصنيفات من MangaDex. يرجى التحقق من اتصالك بالإنترنت أو المحاولة لاحقاً.</p>';
-            } finally {
-                document.getElementById('loader').style.display = 'none';
-            }
+                });
+            });
         }
 
-        // دالة لجلب المانهوا من MangaDex API وتطبيق الفلاتر مع pagination
         async function fetchAndFilterManhwa(append = false) {
             document.getElementById('loader').style.display = 'block';
             
-            // If not appending, clear current results and reset offset
             if (!append) {
                 currentManhwaResults = [];
                 currentOffset = 0;
-                document.getElementById('results-container').innerHTML = ''; // Clear DOM immediately
+                document.getElementById('results-container').innerHTML = '';
             }
 
             try {
@@ -795,16 +780,18 @@
 
                 let params = {
                     limit: limitPerPage,
-                    offset: currentOffset, // Apply offset for pagination
+                    offset: currentOffset,
                     'order[followedCount]': 'desc',
-                    'includes[]': 'cover_art'
+                    'includes[]': 'cover_art',
+                    'hasAvailableChapters': 'true'
                 };
 
-                // Handle multiple genre selection
-                if (selectedGenres.length > 0) {
+                // Handle multiple genre selection (only if not "All")
+                const activeAllBtn = document.querySelector('.category-btn[data-category="all"].active');
+                if (!activeAllBtn && selectedGenres.length > 0) {
                     const genreTagIds = selectedGenres
                         .map(genre => mangadexGenreTags[genre])
-                        .filter(Boolean); // Remove undefined
+                        .filter(Boolean);
                     
                     if (genreTagIds.length > 0) {
                         params['includedTags[]'] = genreTagIds;
@@ -832,7 +819,7 @@
                     }
                 }
                 
-                const response = await fetch(`${MANGADEX_API_URL}/manga?${urlParams.toString()}`);
+                const response = await fetch(`${PROXY_API_URL}/manga?${urlParams.toString()}`);
                 if (!response.ok) {
                     throw new Error(`MangaDex fetch error! Status: ${response.status}`);
                 }
@@ -842,25 +829,31 @@
                 if (data.data && Array.isArray(data.data)) {
                     fetchedManhwa = await Promise.all(data.data.map(async manga => {
                         let chapters = 'غير معروف';
+                        let chaptersNum = 0;
+                        
                         try {
-                            const aggregateResponse = await fetch(`${MANGADEX_API_URL}/manga/${manga.id}/aggregate?translatedLanguage[]=en`);
+                            const aggregateResponse = await fetch(`${PROXY_API_URL}/manga/${manga.id}/aggregate?translatedLanguage[]=en`);
                             if (aggregateResponse.ok) {
                                 const aggregateData = await aggregateResponse.json();
                                 if (aggregateData.volumes) {
-                                    let maxChapter = 0;
                                     for (const vol in aggregateData.volumes) {
                                         for (const chap in aggregateData.volumes[vol].chapters) {
                                             const chapterNum = parseFloat(aggregateData.volumes[vol].chapters[chap].chapter);
-                                            if (!isNaN(chapterNum) && chapterNum > maxChapter) {
-                                                maxChapter = chapterNum;
+                                            if (!isNaN(chapterNum) && chapterNum > chaptersNum) {
+                                                chaptersNum = chapterNum;
                                             }
                                         }
                                     }
-                                    chapters = maxChapter > 0 ? maxChapter.toString() : 'غير معروف';
+                                    chapters = chaptersNum > 0 ? chaptersNum.toString() : 'غير معروف';
                                 }
                             }
                         } catch (e) {
                             console.warn(`Could not fetch chapters for ${manga.id}:`, e);
+                        }
+
+                        // فلترة المانهوا بناءً على عدد الفصول (حتى لو كان "الكل" محددا)
+                        if (minChapters > 0 && (chapters === 'غير معروف' || chaptersNum < minChapters)) {
+                            return null;
                         }
 
                         let coverUrl = 'https://via.placeholder.com/250x350?text=No+Cover';
@@ -886,6 +879,7 @@
                             title: manga.attributes.title.en || Object.values(manga.attributes.title)[0] || 'Unknown Title',
                             cover: coverUrl,
                             chapters: chapters,
+                            chaptersNum: chaptersNum,
                             status: manga.attributes.status,
                             genres: genres,
                             rating: manga.attributes.averageRating ? (parseFloat(manga.attributes.averageRating) / 10).toFixed(1) : null,
@@ -898,44 +892,38 @@
                     }));
                 }
 
-                // Apply local filter for minimum chapters
-                const filteredLocally = fetchedManhwa.filter(manhwa => {
-                    const chaptersNum = parseInt(manhwa.chapters);
-                    return (manhwa.chapters !== 'غير معروف' && !isNaN(chaptersNum) && chaptersNum >= minChapters);
-                });
-                
-                // Filter out duplicates by ID
-                const uniqueManhwa = filteredLocally.filter(newManhwa => 
+                // تصفية النتائج لاستبعاد القيم الفارغة وتطبيق فلتر الفصول
+                const filteredManhwa = fetchedManhwa.filter(manhwa => 
+                    manhwa !== null && 
+                    (minChapters === 0 || (manhwa.chaptersNum >= minChapters))
+                );
+
+                // تصفية النتائج المكررة
+                const uniqueManhwa = filteredManhwa.filter(newManhwa => 
                     !currentManhwaResults.some(existingManhwa => existingManhwa.id === newManhwa.id)
                 );
                 
-                // Add new results to global array
                 currentManhwaResults = currentManhwaResults.concat(uniqueManhwa);
-
-                // Update offset for next request
-                currentOffset += data.data.length; // MangaDex total results is in data.total
-
-                // Check if there are more results available from the API
+                currentOffset += data.data.length;
                 hasMoreResults = data.total > currentOffset;
 
-                displayManhwa(uniqueManhwa, true); // Append new results
+                displayManhwa(uniqueManhwa, true);
             } catch (error) {
                 console.error('Error fetching manhwa from MangaDex:', error);
                 document.getElementById('results-container').innerHTML = '<p style="grid-column: 1/-1; text-align: center; color: red; font-weight: bold;">حدث خطأ أثناء جلب المانهوا من MangaDex. يرجى المحاولة لاحقاً.</p>';
-                hasMoreResults = false; // Assume no more results on error
-                document.getElementById('load-more-btn').style.display = 'none'; // Hide button on error
+                hasMoreResults = false;
+                document.getElementById('load-more-btn').style.display = 'none';
             } finally {
                 document.getElementById('loader').style.display = 'none';
             }
         }
 
-        // Function to reset pagination and fetch new results
         function resetAndFetchManhwa() {
             currentOffset = 0;
             currentManhwaResults = [];
             hasMoreResults = true;
-            document.getElementById('load-more-btn').style.display = 'none'; // Hide until first fetch completes
-            fetchAndFilterManhwa(false); // Do not append, start fresh
+            document.getElementById('load-more-btn').style.display = 'none';
+            fetchAndFilterManhwa(false);
         }
 
         function cycleViewMode() {
@@ -964,8 +952,8 @@
                 currentViewMode = savedViewMode;
             }
             
-            await populateCategories(); // First, get and display categories
-            resetAndFetchManhwa(); // Initial fetch on page load
+            populateCategories(); // Load categories from tags.js
+            resetAndFetchManhwa(); // Initial fetch
             updateViewMode(); // Apply saved view mode
 
             document.getElementById('close-detail').addEventListener('click', () => {
@@ -981,7 +969,7 @@
 
             // Event listener for Load More button
             document.getElementById('load-more-btn').addEventListener('click', () => {
-                fetchAndFilterManhwa(true); // Append new results
+                fetchAndFilterManhwa(true);
             });
             
             // View mode toggle
