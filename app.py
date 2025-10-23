@@ -6,18 +6,19 @@ import requests
 app = Flask(__name__)
 
 MANGADEX_API_URL = "https://api.mangadex.org"
-LIMIT_PER_PAGE = 100
+LIMIT_PER_PAGE = 20
 
-# المسارات الأساسية (كما هي)
+# المسار الرئيسي لتقديم الصفحة الرئيسية (index.html)
 @app.route('/')
 def index():
     return render_template('index.html')
 
+# مسار لخدمة ملفات الـ static (مثل tags.js)
 @app.route('/static/<path:filename>')
 def static_files(filename):
     return send_from_directory(os.path.join(app.root_path, 'static'), filename)
 
-# نقطة النهاية المحدثة لجلب بيانات المانهوا
+# نقطة النهاية الجديدة لجلب بيانات المانهوا
 @app.route('/api/manhwa', methods=['GET'])
 def get_manhwa_data():
     try:
@@ -34,7 +35,7 @@ def get_manhwa_data():
             'limit': LIMIT_PER_PAGE,
             'offset': offset,
             'order[followedCount]': 'desc',
-            'includes[]': 'cover_art',
+            'includes[]': 'cover_art', # تأكيد تضمين الغلاف
             'hasAvailableChapters': 'true'
         }
 
@@ -46,6 +47,7 @@ def get_manhwa_data():
         if demographic != 'all':
             params['publicationDemographic[]'] = [demographic]
         if included_tags:
+            # MangaDex يتوقع includedTags[] كقائمة، و request.args.getlist يعيدها كذلك
             params['includedTags[]'] = included_tags
         
         # 3. جلب البيانات الأساسية من MangaDex
@@ -59,14 +61,15 @@ def get_manhwa_data():
             manga_id = manga['id']
             chapters_num = 0
             
-            # جلب الفصول (Aggregate)
+            # 4. جلب الفصول (Aggregate)
             try:
+                # طلب الفصول
                 agg_response = requests.get(f"{MANGADEX_API_URL}/manga/{manga_id}/aggregate", 
                                             params={'translatedLanguage[]': 'en'})
                 agg_response.raise_for_status()
                 agg_data = agg_response.json()
                 
-                # *** منطقة التصحيح لخطأ 'list' object has no attribute 'values' ***
+                # حساب أعلى رقم فصل (مع التأكد من الأنواع لتجنب خطأ 500 السابق)
                 volumes = agg_data.get('volumes', {})
                 if isinstance(volumes, dict):
                     for vol_data in volumes.values(): 
@@ -74,39 +77,46 @@ def get_manhwa_data():
                         if isinstance(chapters, dict):
                             for chap_data in chapters.values():
                                 try:
-                                    # قراءة الفصل كـ float لتحصل على أعلى رقم بغض النظر عن الأجزاء
                                     chapter_num = float(chap_data.get('chapter', 0))
                                     if chapter_num > chapters_num:
                                         chapters_num = chapter_num
                                 except (ValueError, TypeError):
                                     pass
-                # ***************************************************************
-
             except requests.RequestException as e:
+                # إهمال المانهوا التي تفشل في جلب الفصول الخاصة بها
                 print(f"Warning: Failed to fetch aggregate for {manga_id}: {e}")
+                
             
             # 5. تطبيق فلتر الحد الأدنى للفصول (Python-Side Filtering)
             if min_chapters > 0 and chapters_num < min_chapters:
                 continue
 
-            # استخراج بيانات الغلاف
+            # 6. استخراج بيانات الغلاف (التصحيح الرئيسي)
             cover_url = 'https://via.placeholder.com/250x350?text=No+Cover'
-            cover_art = next((rel for rel in manga.get('relationships', []) if rel['type'] == 'cover_art'), None)
+            
+            # البحث عن علاقة الغلاف
+            cover_art = next((rel for rel in manga.get('relationships', []) if rel.get('type') == 'cover_art'), None)
+            
             if cover_art:
-                file_name = cover_art.get('attributes', {}).get('fileName')
-                if file_name:
-                    cover_url = f"https://uploads.mangadex.org/covers/{manga_id}/{file_name}.256.jpg"
+                # استخراج اسم الملف من العلاقة المضمنة
+                cover_attributes = cover_art.get('attributes')
+                
+                if cover_attributes and isinstance(cover_attributes, dict):
+                    file_name = cover_attributes.get('fileName')
+                    
+                    if file_name:
+                        # بناء رابط الغلاف (جودة 256x256)
+                        cover_url = f"https://uploads.mangadex.org/covers/{manga_id}/{file_name}.256.jpg"
 
-            # استخراج العنوان
+            # 7. استخراج العنوان
             title_en = manga['attributes'].get('title', {}).get('en')
-            # إذا لم يوجد عنوان إنجليزي، نأخذ أول عنوان متاح
             if not title_en:
                 title_data = manga['attributes'].get('title', {})
                 title_val = next(iter(title_data.values()), 'Unknown Title')
             else:
                 title_val = title_en
 
-            # استخراج التصنيفات والميتا
+            # 8. استخراج التصنيفات والميتا
             genres_list = [tag['attributes']['name']['en'] for tag in manga.get('attributes', {}).get('tags', []) 
                            if tag['attributes']['group'] == 'genre' and 'en' in tag['attributes']['name']]
             demographic_val = manga['attributes'].get('publicationDemographic', 'none')
@@ -117,7 +127,7 @@ def get_manhwa_data():
                 'id': manga_id,
                 'title': title_val,
                 'cover': cover_url,
-                'chapters': str(int(chapters_num)) if chapters_num > 0 else 'غير معروف', # عرض رقم صحيح
+                'chapters': str(int(chapters_num)) if chapters_num > 0 else 'غير معروف',
                 'chaptersNum': chapters_num,
                 'status': manga['attributes'].get('status'),
                 'genres': genres_list,
@@ -127,8 +137,7 @@ def get_manhwa_data():
                 'contentRating': content_rating_val
             })
             
-        # 6. إرجاع النتيجة
-        # حساب الأوفست الجديد بشكل صحيح
+        # 9. إرجاع النتيجة
         new_offset = offset + len(manhwa_data.get('data', []))
         
         return jsonify({
@@ -140,9 +149,9 @@ def get_manhwa_data():
         })
 
     except requests.exceptions.RequestException as e:
-        # خطأ في الاتصال الخارجي
+        # خطأ في الاتصال الخارجي (MangaDex)
         error_status = e.response.status_code if e.response is not None else 503
-        error_details = f"MangaDex API failed: {error_status}. Details: {e}"
+        error_details = f"MangaDex API failed: {error_status}."
         print(f"Error fetching data from MangaDex: {error_details}")
         return jsonify({'error': 'Failed to fetch data from external API.', 'details': error_details}), error_status
     except Exception as e:
