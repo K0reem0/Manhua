@@ -1,4 +1,4 @@
-from flask import Flask, render_template, send_from_directory, request, jsonify
+from flask import Flask, render_template, send_from_directory, request, jsonify, Response
 import os
 import requests 
 
@@ -7,8 +7,12 @@ app = Flask(__name__)
 MANGADEX_API_URL = "https://api.mangadex.org"
 LIMIT_PER_PAGE = 20
 
+# رابط صورة Placeholder خارجي
+PLACEHOLDER_URL = "https://via.placeholder.com/250x350?text=No+Cover"
+
 @app.route('/')
 def index():
+    # تأكد من أن ملف HTML موجود باسم 'index.html' في مجلد 'templates'
     return render_template('index.html')
 
 @app.route('/static/<path:filename>')
@@ -40,6 +44,7 @@ def get_manhwa_data():
         if demographic != 'all':
             params['publicationDemographic[]'] = [demographic]
         if included_tags:
+            # MangaDex API يسمح بمعاملات متكررة للـ Tags
             params['includedTags[]'] = included_tags
         
         manhwa_response = requests.get(f"{MANGADEX_API_URL}/manga", params=params)
@@ -51,6 +56,7 @@ def get_manhwa_data():
             manga_id = manga['id']
             chapters_num = 0
 
+            # جلب عدد الفصول
             try:
                 agg_response = requests.get(f"{MANGADEX_API_URL}/manga/{manga_id}/aggregate", params={'translatedLanguage[]': 'en'})
                 agg_response.raise_for_status()
@@ -68,20 +74,25 @@ def get_manhwa_data():
                                 except (ValueError, TypeError):
                                     pass
             except requests.RequestException as e:
+                # لا تقم بحظر الجلب الرئيسي إذا فشل جلب الفصول
                 print(f"Warning: Failed to fetch aggregate for {manga_id}: {e}")
 
+            # تطبيق فلتر الحد الأدنى للفصول على النتائج المسترجعة
             if min_chapters > 0 and chapters_num < min_chapters:
                 continue
 
-            # --- استخراج الغلاف الصحيح ---
-            cover_url = 'https://via.placeholder.com/250x350?text=No+Cover'
+            # --- بناء رابط الغلاف ليمر عبر السيرفر Proxy ---
+            cover_url = PLACEHOLDER_URL
+            file_name = None
             cover_art = next((rel for rel in manga.get('relationships', []) if rel.get('type') == 'cover_art'), None)
             if cover_art:
                 cover_attributes = cover_art.get('attributes', {})
                 file_name = cover_attributes.get('fileName')
                 if file_name:
-                    cover_url = f"https://uploads.mangadex.org/covers/{manga_id}/{file_name}.256.jpg"
+                    # **نقطة التحول: بناء رابط داخلي يمر عبر الـ Proxy Endpoint**
+                    cover_url = f"/cover/{offset}/{manga_id}/{file_name}"
 
+            # جلب العنوان (باستخدام الإنجليزي أو أول عنوان متاح)
             title_en = manga['attributes'].get('title', {}).get('en')
             if not title_en:
                 title_data = manga['attributes'].get('title', {})
@@ -89,6 +100,7 @@ def get_manhwa_data():
             else:
                 title_val = title_en
 
+            # جلب التصنيفات
             genres_list = [tag['attributes']['name']['en'] for tag in manga.get('attributes', {}).get('tags', [])
                            if tag['attributes']['group'] == 'genre' and 'en' in tag['attributes']['name']]
             demographic_val = manga['attributes'].get('publicationDemographic', 'none')
@@ -127,6 +139,31 @@ def get_manhwa_data():
         print(error_message)
         return jsonify({'error': 'An internal server error occurred.', 'details': error_message}), 500
 
+@app.route('/cover/<int:request_offset>/<manga_id>/<filename>')
+def get_cover_image(request_offset, manga_id, filename):
+    """نقطة نهاية لتقديم صور الغلاف عبر الخادم (Proxy)."""
+    
+    # بناء URL الصورة الخارجية (استخدم 512p لجودة أفضل)
+    image_url = f"https://uploads.mangadex.org/covers/{manga_id}/{filename}.512.jpg"
+    
+    try:
+        # طلب الصورة من MangaDex مع مهلة (timeout)
+        image_response = requests.get(image_url, stream=True, timeout=15)
+        image_response.raise_for_status()
+        
+        # إعادة توجيه الصورة مباشرة للمتصفح باستخدام Response
+        content_type = image_response.headers.get('Content-Type', 'image/jpeg')
+        return Response(image_response.iter_content(chunk_size=8192),
+                        mimetype=content_type,
+                        status=200)
+    except requests.RequestException as e:
+        print(f"Error proxying cover image {image_url}: {e}")
+        # إذا فشل البروكسي، يمكن إرجاع رابط Placeholder أو إرجاع خطأ 404
+        # بما أننا سنضيف معالج أخطاء في JS، سنكتفي بإرجاع 404
+        return jsonify({'error': 'Image not found or failed to proxy'}), 404
+
+
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
-    app.run(host='0.0.0.0', port=port)
+    # عند تشغيل الخادم، تأكد من وجود tags.js و index.html
+    app.run(host='0.0.0.0', port=port, debug=True)
