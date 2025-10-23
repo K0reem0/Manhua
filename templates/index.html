@@ -334,6 +334,7 @@
             display: flex;
             gap: 2rem;
             padding: 2rem;
+            position: relative; /* لإضافة زر الإغلاق كـ absolute */
         }
 
         .detail-cover {
@@ -343,11 +344,35 @@
             border-radius: 5px;
             box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
         }
+        
+        /* التعديل الجديد: تجميع العنوان وزر النسخ */
+        .detail-title-group {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 1rem;
+        }
 
         .detail-title {
             font-size: 2rem;
-            margin-bottom: 1rem;
             color: var(--primary);
+            margin: 0; /* تم إزالة الهامش السفلي لـ h1 ونقله إلى group */
+        }
+
+        .copy-btn {
+            background: var(--secondary);
+            color: white;
+            border: none;
+            padding: 0.5rem 1rem;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 0.9rem;
+            transition: background 0.3s, transform 0.2s;
+        }
+        
+        .copy-btn:hover {
+            background: #6a3eda;
+            transform: scale(1.05);
         }
 
         .detail-meta {
@@ -384,6 +409,11 @@
             display: flex;
             align-items: center;
             justify-content: center;
+            transition: transform 0.2s;
+        }
+
+        .close-btn:hover {
+            transform: scale(1.1);
         }
 
         /* التكيف مع الشاشات الصغيرة */
@@ -443,6 +473,15 @@
                 width: 100%;
                 height: auto;
                 max-height: 400px;
+            }
+            
+            .close-btn {
+                top: 1rem;
+                left: 1rem;
+            }
+            
+            .detail-title-group {
+                flex-wrap: wrap;
             }
         }
 
@@ -559,7 +598,12 @@
             <div class="detail-header">
                 <img src="" alt="Manhwa Cover" class="detail-cover" id="detail-cover">
                 <div class="detail-content">
-                    <h1 class="detail-title" id="detail-title"></h1>
+                    <div class="detail-title-group">
+                        <h1 class="detail-title" id="detail-title"></h1>
+                        <button class="copy-btn" id="copy-title-btn" title="نسخ العنوان">
+                            <i class="fas fa-copy"></i> نسخ
+                        </button>
+                    </div>
                     <div class="detail-meta" id="detail-meta"></div>
                     <p class="detail-description" id="detail-description"></p>
                 </div>
@@ -567,11 +611,10 @@
         </div>
     </div>
 
-    <!-- ملف التصنيفات -->
-    <script src="tags.js"></script>
+    <script src="{{ url_for('static_files', filename='tags.js') }}"></script>
 
     <script>
-        const PROXY_API_URL = "https://manhua-fa401fa1e191.herokuapp.com/api";
+        const MANGADEX_API_URL = "https://api.mangadex.org";
         let currentManhwaResults = []; // Stores currently displayed manhwa
         let currentOffset = 0; // Current offset for pagination
         const limitPerPage = 100; // Number of results per page (MangaDex max limit is 100 per request)
@@ -679,9 +722,23 @@
             const title = document.getElementById('detail-title');
             const meta = document.getElementById('detail-meta');
             const description = document.getElementById('detail-description');
+            const copyButton = document.getElementById('copy-title-btn');
 
             cover.src = manhwa.cover || 'https://via.placeholder.com/250x350?text=No+Cover';
             title.textContent = manhwa.title || 'لا يوجد عنوان';
+
+            // إضافة وظيفة نسخ العنوان
+            copyButton.onclick = () => {
+                navigator.clipboard.writeText(manhwa.title).then(() => {
+                    copyButton.textContent = 'تم النسخ!';
+                    setTimeout(() => {
+                        copyButton.innerHTML = '<i class="fas fa-copy"></i> نسخ';
+                    }, 1500);
+                }).catch(err => {
+                    console.error('Failed to copy text: ', err);
+                    alert('فشل النسخ.');
+                });
+            };
 
             let metaHTML = '';
             if (manhwa.chapters && manhwa.chapters !== 'غير معروف') metaHTML += `<div class="meta-item">${manhwa.chapters} فصول</div>`;
@@ -696,7 +753,7 @@
             meta.innerHTML = metaHTML;
             description.textContent = manhwa.description || 'لا يوجد وصف متاح';
             detail.style.display = 'block';
-            document.body.style.overflow = 'hidden';
+            document.body.style.overflow = 'hidden'; // منع تمرير الصفحة الرئيسية
         }
 
         function populateCategories() {
@@ -773,14 +830,15 @@
             }
 
             try {
-                const minChapters = parseInt(document.getElementById('chapters-min').value) || 0;
+                const minChaptersInput = document.getElementById('chapters-min');
+                const minChapters = parseInt(minChaptersInput.value) || 0;
                 const statusFilter = document.getElementById('status-filter').value;
                 const contentRatingFilter = document.getElementById('content-rating-filter').value;
                 const demographicFilter = document.getElementById('demographic-filter').value;
 
                 let params = {
                     limit: limitPerPage,
-                    offset: currentOffset,
+                    offset: currentOffset, // **استخدام الأوفست الحالي للتحميل الإضافي**
                     'order[followedCount]': 'desc',
                     'includes[]': 'cover_art',
                     'hasAvailableChapters': 'true'
@@ -819,11 +877,15 @@
                     }
                 }
                 
-                const response = await fetch(`${PROXY_API_URL}/manga?${urlParams.toString()}`);
+                const response = await fetch(`${MANGADEX_API_URL}/manga?${urlParams.toString()}`);
                 if (!response.ok) {
                     throw new Error(`MangaDex fetch error! Status: ${response.status}`);
                 }
                 const data = await response.json();
+
+                // **التعديل الهام لضمان عمل "تحميل المزيد":**
+                // يجب زيادة الأوفست بناءً على عدد النتائج التي طلبناها من API
+                currentOffset += data.data.length;
 
                 let fetchedManhwa = [];
                 if (data.data && Array.isArray(data.data)) {
@@ -832,7 +894,7 @@
                         let chaptersNum = 0;
                         
                         try {
-                            const aggregateResponse = await fetch(`${PROXY_API_URL}/manga/${manga.id}/aggregate?translatedLanguage[]=en`);
+                            const aggregateResponse = await fetch(`${MANGADEX_API_URL}/manga/${manga.id}/aggregate?translatedLanguage[]=en`);
                             if (aggregateResponse.ok) {
                                 const aggregateData = await aggregateResponse.json();
                                 if (aggregateData.volumes) {
@@ -849,11 +911,6 @@
                             }
                         } catch (e) {
                             console.warn(`Could not fetch chapters for ${manga.id}:`, e);
-                        }
-
-                        // فلترة المانهوا بناءً على عدد الفصول (حتى لو كان "الكل" محددا)
-                        if (minChapters > 0 && (chapters === 'غير معروف' || chaptersNum < minChapters)) {
-                            return null;
                         }
 
                         let coverUrl = 'https://via.placeholder.com/250x350?text=No+Cover';
@@ -892,22 +949,22 @@
                     }));
                 }
 
-                // تصفية النتائج لاستبعاد القيم الفارغة وتطبيق فلتر الفصول
-                const filteredManhwa = fetchedManhwa.filter(manhwa => 
-                    manhwa !== null && 
-                    (minChapters === 0 || (manhwa.chaptersNum >= minChapters))
-                );
-
+                // تصفية النتائج لاستبعاد القيم الفارغة وتطبيق فلتر الفصول هنا
+                const finalFilteredManhwa = fetchedManhwa
+                    .filter(manhwa => manhwa !== null)
+                    .filter(manhwa => (minChapters === 0 || (manhwa.chaptersNum >= minChapters)));
+                
                 // تصفية النتائج المكررة
-                const uniqueManhwa = filteredManhwa.filter(newManhwa => 
+                const uniqueManhwa = finalFilteredManhwa.filter(newManhwa => 
                     !currentManhwaResults.some(existingManhwa => existingManhwa.id === newManhwa.id)
                 );
                 
                 currentManhwaResults = currentManhwaResults.concat(uniqueManhwa);
-                currentOffset += data.data.length;
-                hasMoreResults = data.total > currentOffset;
+                
+                // **تحديث hasMoreResults:** نعتمد على العدد الإجمالي و currentOffset الحقيقي المرسل إلى API
+                hasMoreResults = data.total > currentOffset; 
 
-                displayManhwa(uniqueManhwa, true);
+                displayManhwa(uniqueManhwa, append);
             } catch (error) {
                 console.error('Error fetching manhwa from MangaDex:', error);
                 document.getElementById('results-container').innerHTML = '<p style="grid-column: 1/-1; text-align: center; color: red; font-weight: bold;">حدث خطأ أثناء جلب المانهوا من MangaDex. يرجى المحاولة لاحقاً.</p>';
@@ -952,22 +1009,31 @@
                 currentViewMode = savedViewMode;
             }
             
-            populateCategories(); // Load categories from tags.js
+            // تأكد من وجود mangaTags قبل المتابعة
+            if (typeof mangaTags === 'undefined') {
+                console.error("tags.js not loaded. Cannot populate categories.");
+                // يمكن إضافة رسالة للمستخدم هنا إذا فشل التحميل
+            } else {
+                populateCategories(); // Load categories from tags.js
+            }
+            
             resetAndFetchManhwa(); // Initial fetch
             updateViewMode(); // Apply saved view mode
 
+            // زر الإغلاق (تم إصلاحه)
             document.getElementById('close-detail').addEventListener('click', () => {
                 document.getElementById('manhwa-detail').style.display = 'none';
-                document.body.style.overflow = 'auto';
+                document.body.style.overflow = 'auto'; // إعادة تفعيل التمرير
             });
 
             // Event listeners for filter changes
-            document.getElementById('chapters-min').addEventListener('input', resetAndFetchManhwa);
+            // **تم تعديل chapters-min ليحدث البحث تلقائياً عند التغيير**
+            document.getElementById('chapters-min').addEventListener('change', resetAndFetchManhwa); 
             document.getElementById('status-filter').addEventListener('change', resetAndFetchManhwa);
             document.getElementById('content-rating-filter').addEventListener('change', resetAndFetchManhwa);
             document.getElementById('demographic-filter').addEventListener('change', resetAndFetchManhwa);
 
-            // Event listener for Load More button
+            // Event listener for Load More button (تم إصلاحه في منطق fetchAndFilterManhwa)
             document.getElementById('load-more-btn').addEventListener('click', () => {
                 fetchAndFilterManhwa(true);
             });
