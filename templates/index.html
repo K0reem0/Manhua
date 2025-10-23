@@ -677,26 +677,16 @@
 
         function displayManhwa(manhwaList, append = false) {
             const container = document.getElementById('results-container');
-            if (!append) {
-                container.innerHTML = '';
-            }
-
-            // إذا كان البحث لأول مرة والنتائج فارغة
+            if (!append) container.innerHTML = '';
             if (!manhwaList || manhwaList.length === 0) {
-                if (!append) {
-                    container.innerHTML = '<p style="grid-column: 1/-1; text-align: center;">لا توجد نتائج متطابقة</p>';
-                }
+                if (!append) container.innerHTML = '<p style="grid-column: 1/-1; text-align: center;">لا توجد نتائج متطابقة</p>';
                 document.getElementById('load-more-btn').style.display = 'none';
                 return;
             }
-
             manhwaList.forEach(manhwa => {
                 const card = document.createElement('div');
                 card.className = 'manhwa-card';
-                
-                // تنسيق عدد الفصول
                 const chaptersText = manhwa.chapters && manhwa.chapters !== '0' ? manhwa.chapters : 'غير معروف';
-                
                 let cardHTML = `
                     <img src="${manhwa.cover || 'https://via.placeholder.com/250x350?text=No+Cover'}" alt="${manhwa.title}" class="manhwa-cover" loading="lazy">
                     <div class="manhwa-info">
@@ -705,21 +695,13 @@
                             <span>${chaptersText} فصل</span>
                             <span>${manhwa.rating ? parseFloat(manhwa.rating).toFixed(1) + ' ★' : ''}</span>
                         </div>
+                        ${currentViewMode === 'detailed' ? `<p class="manhwa-description">${manhwa.description || 'لا يوجد وصف متاح'}</p>` : ''}
+                    </div>
                 `;
-                
-                if (currentViewMode === 'detailed') {
-                    cardHTML += `
-                        <p class="manhwa-description">${manhwa.description || 'لا يوجد وصف متاح'}</p>
-                    `;
-                }
-                
-                cardHTML += `</div>`;
                 card.innerHTML = cardHTML;
-                
                 card.addEventListener('click', () => showManhwaDetail(manhwa));
                 container.appendChild(card);
             });
-            
             if (hasMoreResults) {
                 document.getElementById('load-more-btn').style.display = 'block';
             } else {
