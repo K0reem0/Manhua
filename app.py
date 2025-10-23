@@ -91,22 +91,19 @@ def get_manhwa_data():
             if min_chapters > 0 and chapters_num < min_chapters:
                 continue
 
-            # 6. استخراج بيانات الغلاف (التصحيح الرئيسي)
+            # app.py (المنطق الذي تم تصحيحه)
+            # 6. استخراج بيانات الغلاف 
             cover_url = 'https://via.placeholder.com/250x350?text=No+Cover'
-            
-            # البحث عن علاقة الغلاف
             cover_art = next((rel for rel in manga.get('relationships', []) if rel.get('type') == 'cover_art'), None)
             
             if cover_art:
-                # استخراج اسم الملف من العلاقة المضمنة
                 cover_attributes = cover_art.get('attributes')
-                
                 if cover_attributes and isinstance(cover_attributes, dict):
                     file_name = cover_attributes.get('fileName')
-                    
                     if file_name:
-                        # بناء رابط الغلاف (جودة 256x256)
+                        # هذا هو الرابط الذي يجب أن يعمل
                         cover_url = f"https://uploads.mangadex.org/covers/{manga_id}/{file_name}.256.jpg"
+
 
             # 7. استخراج العنوان
             title_en = manga['attributes'].get('title', {}).get('en')
