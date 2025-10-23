@@ -241,6 +241,7 @@
             width: 150px;
             height: 200px;
             border-radius: 5px 0 0 5px;
+            flex-shrink: 0;
         }
 
         .manhwa-info {
@@ -337,6 +338,10 @@
             position: relative; /* لإضافة زر الإغلاق كـ absolute */
         }
 
+        .detail-content {
+            flex-grow: 1;
+        }
+
         .detail-cover {
             width: 250px;
             height: 350px;
@@ -392,6 +397,7 @@
         .detail-description {
             line-height: 1.6;
             margin-bottom: 1.5rem;
+            white-space: pre-wrap; /* للحفاظ على تنسيق الوصف إذا كان من MangaDex */
         }
 
         .close-btn {
@@ -606,6 +612,7 @@
                     </div>
                     <div class="detail-meta" id="detail-meta"></div>
                     <p class="detail-description" id="detail-description"></p>
+                    <a id="manhwa-link" target="_blank" style="color: var(--primary); font-weight: bold; margin-top: 10px; display: inline-block;">قراءة المانهوا على MangaDex</a>
                 </div>
             </div>
         </div>
@@ -614,14 +621,14 @@
     <script src="{{ url_for('static_files', filename='tags.js') }}"></script>
 
     <script>
-        const MANGADEX_API_URL = "https://api.mangadex.org";
-        let currentManhwaResults = []; // Stores currently displayed manhwa
-        let currentOffset = 0; // Current offset for pagination
-        const limitPerPage = 100; // Number of results per page (MangaDex max limit is 100 per request)
-        let hasMoreResults = true; // Flag to indicate if more results are available
-        let selectedGenres = []; // Array to store multiple selected genres
+        // المتغيرات العالمية
+        let currentManhwaResults = [];
+        let currentOffset = 0; // الأوفست الآن يُدار بواسطة Flask
+        let hasMoreResults = true;
+        let selectedGenres = [];
         let currentViewMode = 'grid'; // 'grid', 'compact', 'detailed'
 
+        // وظائف واجهة المستخدم
         function createSakura() {
             const container = document.getElementById('sakura-container');
             const sakuraCount = 20;
@@ -657,7 +664,7 @@
                 document.getElementById('view-toggle').innerHTML = '<i class="fas fa-th"></i>';
             }
             
-            // Re-display current results to apply new view mode
+            // إعادة عرض النتائج الحالية لتطبيق وضع العرض الجديد
             displayManhwa(currentManhwaResults, false);
         }
 
@@ -671,9 +678,10 @@
         function displayManhwa(manhwaList, append = false) {
             const container = document.getElementById('results-container');
             if (!append) {
-                container.innerHTML = ''; // Clear only if not appending
+                container.innerHTML = '';
             }
 
+            // إذا كان البحث لأول مرة والنتائج فارغة
             if (!manhwaList || manhwaList.length === 0) {
                 if (!append) {
                     container.innerHTML = '<p style="grid-column: 1/-1; text-align: center;">لا توجد نتائج متطابقة</p>';
@@ -686,13 +694,16 @@
                 const card = document.createElement('div');
                 card.className = 'manhwa-card';
                 
+                // تنسيق عدد الفصول
+                const chaptersText = manhwa.chapters && manhwa.chapters !== '0' ? manhwa.chapters : 'غير معروف';
+                
                 let cardHTML = `
-                    <img src="${manhwa.cover || 'https://via.placeholder.com/250x350?text=No+Cover'}" alt="${manhwa.title}" class="manhwa-cover">
+                    <img src="${manhwa.cover || 'https://via.placeholder.com/250x350?text=No+Cover'}" alt="${manhwa.title}" class="manhwa-cover" loading="lazy">
                     <div class="manhwa-info">
                         <h3 class="manhwa-title">${manhwa.title}</h3>
                         <div class="manhwa-meta">
-                            <span>${manhwa.chapters || '?'} فصل</span>
-                            <span>${manhwa.rating ? manhwa.rating + ' ★' : ''}</span>
+                            <span>${chaptersText} فصل</span>
+                            <span>${manhwa.rating ? parseFloat(manhwa.rating).toFixed(1) + ' ★' : ''}</span>
                         </div>
                 `;
                 
@@ -723,9 +734,11 @@
             const meta = document.getElementById('detail-meta');
             const description = document.getElementById('detail-description');
             const copyButton = document.getElementById('copy-title-btn');
+            const link = document.getElementById('manhwa-link');
 
             cover.src = manhwa.cover || 'https://via.placeholder.com/250x350?text=No+Cover';
             title.textContent = manhwa.title || 'لا يوجد عنوان';
+            link.href = `https://mangadex.org/title/${manhwa.id}`;
 
             // إضافة وظيفة نسخ العنوان
             copyButton.onclick = () => {
@@ -741,11 +754,14 @@
             };
 
             let metaHTML = '';
-            if (manhwa.chapters && manhwa.chapters !== 'غير معروف') metaHTML += `<div class="meta-item">${manhwa.chapters} فصول</div>`;
+            const chaptersText = manhwa.chapters && manhwa.chapters !== '0' ? manhwa.chapters : 'غير معروف';
+
+            if (chaptersText) metaHTML += `<div class="meta-item">${chaptersText} فصول</div>`;
             if (manhwa.status) metaHTML += `<div class="meta-item">${manhwa.status}</div>`;
-            if (manhwa.rating) metaHTML += `<div class="meta-item">${manhwa.rating} ★</div>`;
+            if (manhwa.rating) metaHTML += `<div class="meta-item">${parseFloat(manhwa.rating).toFixed(1)} ★</div>`;
             if (manhwa.genres && manhwa.genres.length > 0) {
-                metaHTML += manhwa.genres.map(genre => `<div class="meta-item">${genre}</div>`).join('');
+                // عرض أول 4 تصنيفات فقط في صندوق التفاصيل
+                metaHTML += manhwa.genres.slice(0, 4).map(genre => `<div class="meta-item">${genre}</div>`).join('');
             }
             if (manhwa.demographic && manhwa.demographic !== 'none') metaHTML += `<div class="meta-item">${manhwa.demographic}</div>`;
             if (manhwa.contentRating && manhwa.contentRating !== 'safe') metaHTML += `<div class="meta-item">${manhwa.contentRating}</div>`;
@@ -777,6 +793,11 @@
             });
             
             // إضافة التصنيفات من ملف tags.js
+            if (typeof mangaTags === 'undefined') {
+                console.error("mangaTags is not defined. tags.js failed to load or is empty.");
+                return;
+            }
+
             Object.entries(mangaTags).forEach(([group, tags]) => {
                 // إضافة عنوان المجموعة
                 const groupHeader = document.createElement('h3');
@@ -820,6 +841,7 @@
             });
         }
 
+        // دالة الجلب المحدثة للاتصال بسيرفر Flask
         async function fetchAndFilterManhwa(append = false) {
             document.getElementById('loader').style.display = 'block';
             
@@ -830,44 +852,40 @@
             }
 
             try {
-                const minChaptersInput = document.getElementById('chapters-min');
-                const minChapters = parseInt(minChaptersInput.value) || 0;
+                // 1. جمع الفلاتر من واجهة المستخدم
+                const minChapters = parseInt(document.getElementById('chapters-min').value) || 0;
                 const statusFilter = document.getElementById('status-filter').value;
                 const contentRatingFilter = document.getElementById('content-rating-filter').value;
                 const demographicFilter = document.getElementById('demographic-filter').value;
-
+                
                 let params = {
-                    limit: limitPerPage,
-                    offset: currentOffset, // **استخدام الأوفست الحالي للتحميل الإضافي**
-                    'order[followedCount]': 'desc',
-                    'includes[]': 'cover_art',
-                    'hasAvailableChapters': 'true'
+                    offset: currentOffset,
+                    min_chapters: minChapters, 
+                    status: statusFilter,
+                    content_rating: contentRatingFilter,
+                    demographic: demographicFilter
                 };
 
-                // Handle multiple genre selection (only if not "All")
+                // 2. تجميع التصنيفات المحددة (Tags)
                 const activeAllBtn = document.querySelector('.category-btn[data-category="all"].active');
                 if (!activeAllBtn && selectedGenres.length > 0) {
+                    // تأكد من وجود mangadexGenreTags
+                    if (typeof mangadexGenreTags === 'undefined') {
+                        throw new Error("Critical Error: mangadexGenreTags is not defined. Check tags.js file.");
+                    }
+
                     const genreTagIds = selectedGenres
                         .map(genre => mangadexGenreTags[genre])
                         .filter(Boolean);
                     
-                    if (genreTagIds.length > 0) {
-                        params['includedTags[]'] = genreTagIds;
-                    }
-                }
-
-                if (statusFilter !== 'all') {
-                    params['status[]'] = [statusFilter];
-                }
-
-                if (contentRatingFilter !== 'all') {
-                    params['contentRating[]'] = [contentRatingFilter];
-                }
-
-                if (demographicFilter !== 'all') {
-                    params['publicationDemographic[]'] = [demographicFilter];
+                    // إضافة كل Tag ID كبارامتر منفصل (لتتم قراءته بـ request.args.getlist في Flask)
+                    genreTagIds.forEach(tagId => {
+                        params['includedTags[]'] = params['includedTags[]'] || [];
+                        params['includedTags[]'].push(tagId);
+                    });
                 }
                 
+                // 3. بناء الـ URL للاتصال بسيرفر Flask المحلي
                 const urlParams = new URLSearchParams();
                 for (const key in params) {
                     if (Array.isArray(params[key])) {
@@ -877,97 +895,45 @@
                     }
                 }
                 
-                const response = await fetch(`${MANGADEX_API_URL}/manga?${urlParams.toString()}`);
-                if (!response.ok) {
-                    throw new Error(`MangaDex fetch error! Status: ${response.status}`);
-                }
-                const data = await response.json();
-
-                // **التعديل الهام لضمان عمل "تحميل المزيد":**
-                // يجب زيادة الأوفست بناءً على عدد النتائج التي طلبناها من API
-                currentOffset += data.data.length;
-
-                let fetchedManhwa = [];
-                if (data.data && Array.isArray(data.data)) {
-                    fetchedManhwa = await Promise.all(data.data.map(async manga => {
-                        let chapters = 'غير معروف';
-                        let chaptersNum = 0;
-                        
-                        try {
-                            const aggregateResponse = await fetch(`${MANGADEX_API_URL}/manga/${manga.id}/aggregate?translatedLanguage[]=en`);
-                            if (aggregateResponse.ok) {
-                                const aggregateData = await aggregateResponse.json();
-                                if (aggregateData.volumes) {
-                                    for (const vol in aggregateData.volumes) {
-                                        for (const chap in aggregateData.volumes[vol].chapters) {
-                                            const chapterNum = parseFloat(aggregateData.volumes[vol].chapters[chap].chapter);
-                                            if (!isNaN(chapterNum) && chapterNum > chaptersNum) {
-                                                chaptersNum = chapterNum;
-                                            }
-                                        }
-                                    }
-                                    chapters = chaptersNum > 0 ? chaptersNum.toString() : 'غير معروف';
-                                }
-                            }
-                        } catch (e) {
-                            console.warn(`Could not fetch chapters for ${manga.id}:`, e);
-                        }
-
-                        let coverUrl = 'https://via.placeholder.com/250x350?text=No+Cover';
-                        const coverArt = manga.relationships.find(r => r.type === 'cover_art');
-                        if (coverArt) {
-                            coverUrl = `https://uploads.mangadex.org/covers/${manga.id}/${coverArt.attributes.fileName}.256.jpg`;
-                        }
-
-                        const genres = [];
-                        const demographic = manga.attributes.publicationDemographic || 'none';
-                        const contentRating = manga.attributes.contentRating || 'safe';
-
-                        if (manga.attributes.tags) {
-                            manga.attributes.tags.forEach(tag => {
-                                if (tag.attributes && tag.attributes.group === 'genre' && tag.attributes.name && tag.attributes.name.en) {
-                                    genres.push(tag.attributes.name.en);
-                                }
-                            });
-                        }
-
-                        return {
-                            id: manga.id,
-                            title: manga.attributes.title.en || Object.values(manga.attributes.title)[0] || 'Unknown Title',
-                            cover: coverUrl,
-                            chapters: chapters,
-                            chaptersNum: chaptersNum,
-                            status: manga.attributes.status,
-                            genres: genres,
-                            rating: manga.attributes.averageRating ? (parseFloat(manga.attributes.averageRating) / 10).toFixed(1) : null,
-                            description: manga.attributes.description?.en || 'لا يوجد وصف متاح',
-                            source: 'MangaDex',
-                            url: `https://mangadex.org/title/${manga.id}`,
-                            demographic: demographic,
-                            contentRating: contentRating
-                        };
-                    }));
-                }
-
-                // تصفية النتائج لاستبعاد القيم الفارغة وتطبيق فلتر الفصول هنا
-                const finalFilteredManhwa = fetchedManhwa
-                    .filter(manhwa => manhwa !== null)
-                    .filter(manhwa => (minChapters === 0 || (manhwa.chaptersNum >= minChapters)));
+                // **الاتصال بنقطة النهاية المحلية /api/manhwa**
+                const response = await fetch(`/api/manhwa?${urlParams.toString()}`);
                 
-                // تصفية النتائج المكررة
+                if (!response.ok) {
+                    // إذا كان هناك خطأ في سيرفر Flask (مثلاً 500 أو 503)
+                    throw new Error(`Flask API Error! Status: ${response.status}`);
+                }
+                
+                const responseJson = await response.json();
+                
+                if (responseJson.error) {
+                    // إذا أرجع Flask خطأ محدد
+                    throw new Error(`Server API Error: ${responseJson.details || responseJson.error}`);
+                }
+                
+                const data = responseJson; // البيانات الآن هي النتيجة المجهزة من Flask
+                
+                // 4. تحديث حالة التطبيق بناءً على استجابة Flask
+                const finalFilteredManhwa = data.data;
+
+                // تصفية النتائج المكررة (مهمة لمنع تكرار العرض في حال جلب نفس البيانات)
                 const uniqueManhwa = finalFilteredManhwa.filter(newManhwa => 
                     !currentManhwaResults.some(existingManhwa => existingManhwa.id === newManhwa.id)
                 );
                 
                 currentManhwaResults = currentManhwaResults.concat(uniqueManhwa);
                 
-                // **تحديث hasMoreResults:** نعتمد على العدد الإجمالي و currentOffset الحقيقي المرسل إلى API
-                hasMoreResults = data.total > currentOffset; 
+                // تحديث الأوفست والقيمة المتبقية من استجابة Flask
+                currentOffset = data.offset; 
+                hasMoreResults = data.hasMore; 
 
                 displayManhwa(uniqueManhwa, append);
+                
             } catch (error) {
-                console.error('Error fetching manhwa from MangaDex:', error);
-                document.getElementById('results-container').innerHTML = '<p style="grid-column: 1/-1; text-align: center; color: red; font-weight: bold;">حدث خطأ أثناء جلب المانهوا من MangaDex. يرجى المحاولة لاحقاً.</p>';
+                console.error('Error fetching manhwa from Flask API:', error);
+                
+                let errorMessage = 'حدث خطأ أثناء جلب المانهوا. تفاصيل: ' + error.message;
+                
+                document.getElementById('results-container').innerHTML = `<p style="grid-column: 1/-1; text-align: center; color: red; font-weight: bold;">${errorMessage}</p>`;
                 hasMoreResults = false;
                 document.getElementById('load-more-btn').style.display = 'none';
             } finally {
@@ -995,10 +961,11 @@
             updateViewMode();
         }
 
+        // التهيئة وبدء التشغيل
         document.addEventListener('DOMContentLoaded', async () => {
             createSakura();
             
-            // Load saved preferences
+            // تحميل التفضيلات المحفوظة
             if (localStorage.getItem('darkMode') === 'true') {
                 document.body.classList.add('dark-mode');
                 document.getElementById('theme-toggle').innerHTML = '<i class="fas fa-sun"></i>';
@@ -1009,39 +976,35 @@
                 currentViewMode = savedViewMode;
             }
             
-            // تأكد من وجود mangaTags قبل المتابعة
+            // تأكد من أن tags.js تم تحميله
             if (typeof mangaTags === 'undefined') {
-                console.error("tags.js not loaded. Cannot populate categories.");
-                // يمكن إضافة رسالة للمستخدم هنا إذا فشل التحميل
+                console.error("tags.js failed to load. Categories will not be available.");
             } else {
-                populateCategories(); // Load categories from tags.js
+                populateCategories();
             }
             
-            resetAndFetchManhwa(); // Initial fetch
-            updateViewMode(); // Apply saved view mode
+            resetAndFetchManhwa(); // بدء الجلب الأولي
+            updateViewMode(); // تطبيق وضع العرض
 
-            // زر الإغلاق (تم إصلاحه)
+            // زر الإغلاق
             document.getElementById('close-detail').addEventListener('click', () => {
                 document.getElementById('manhwa-detail').style.display = 'none';
-                document.body.style.overflow = 'auto'; // إعادة تفعيل التمرير
+                document.body.style.overflow = 'auto';
             });
 
-            // Event listeners for filter changes
-            // **تم تعديل chapters-min ليحدث البحث تلقائياً عند التغيير**
+            // أدوات التحكم (تؤدي إلى إعادة الجلب من السيرفر)
             document.getElementById('chapters-min').addEventListener('change', resetAndFetchManhwa); 
             document.getElementById('status-filter').addEventListener('change', resetAndFetchManhwa);
             document.getElementById('content-rating-filter').addEventListener('change', resetAndFetchManhwa);
             document.getElementById('demographic-filter').addEventListener('change', resetAndFetchManhwa);
 
-            // Event listener for Load More button (تم إصلاحه في منطق fetchAndFilterManhwa)
+            // زر تحميل المزيد
             document.getElementById('load-more-btn').addEventListener('click', () => {
                 fetchAndFilterManhwa(true);
             });
             
-            // View mode toggle
+            // تبديل العرض والوضع الليلي
             document.getElementById('view-toggle').addEventListener('click', cycleViewMode);
-            
-            // Dark mode toggle
             document.getElementById('theme-toggle').addEventListener('click', toggleDarkMode);
         });
     </script>
