@@ -5,7 +5,7 @@ import requests
 app = Flask(__name__)
 
 MANGADEX_API_URL = "https://api.mangadex.org"
-LIMIT_PER_PAGE = 100
+LIMIT_PER_PAGE = 50
 
 # رابط صورة Placeholder خارجي
 PLACEHOLDER_URL = "https://via.placeholder.com/250x350?text=No+Cover"
