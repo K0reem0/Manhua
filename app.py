@@ -1,98 +1,116 @@
-from flask import Flask, render_template, send_from_directory, request, jsonify, Response
+# -*- coding: utf-8 -*-
 import os
-import requests 
-import time  # استيراد مكتبة الوقت لإضافة تأخير بين الطلبات
+import requests
+import time
+import json
+from flask import Flask, jsonify, request, send_from_directory, Response
+
+# الثوابت
+MANGADEX_API_URL = "https://api.mangadex.org"
+LIMIT_PER_PAGE = 20  # عدد النتائج التي يتم جلبها في كل طلب
+PLACEHOLDER_URL = 'https://via.placeholder.com/250x350?text=No+Cover'
 
 app = Flask(__name__)
 
-MANGADEX_API_URL = "https://api.mangadex.org"
-LIMIT_PER_PAGE = 200 # عدد النتائج التي يجب إرجاعها للمتصفح
-
-# رابط صورة Placeholder خارجي
-PLACEHOLDER_URL = "https://via.placeholder.com/250x350?text=No+Cover"
-
+# مسار الجذر لعرض ملف index.html
 @app.route('/')
 def index():
-    return render_template('index.html')
+    """تقديم ملف index.html الرئيسي."""
+    try:
+        # افتراض أن index.html موجود في مجلد static
+        return send_from_directory('static', 'index.html')
+    except Exception as e:
+        return f"Error serving index.html: {e}", 500
 
-@app.route('/static/<path:filename>')
+# مسار لتقديم الملفات الثابتة الأخرى (مثل tags.js)
+@app.route('/static_files/<path:filename>')
 def static_files(filename):
-    return send_from_directory(os.path.join(app.root_path, 'static'), filename)
+    """تقديم الملفات الثابتة مثل JavaScript."""
+    # افتراض أن جميع الملفات الثابتة الأخرى موجودة أيضًا في مجلد static
+    return send_from_directory('static', filename)
 
 @app.route('/api/manhwa', methods=['GET'])
 def get_manhwa_data():
+    """نقطة نهاية لجلب بيانات المانهوا من MangaDex وتطبيق الفلاتر."""
     try:
-        # قراءة البارامترات
+        # 1. قراءة بارامترات الطلب من العميل
         initial_offset = request.args.get('offset', type=int, default=0)
-        client_offset = initial_offset # الأوفست الذي سنرجعه للـ Client
         min_chapters = request.args.get('min_chapters', type=int, default=0)
         status = request.args.get('status', default='all')
         content_rating = request.args.get('content_rating', default='all')
         demographic = request.args.get('demographic', default='all')
+        
+        # استخدام getlist لاستقبال قائمة الـ IDs لتصنيفات (Tags)
         included_tags = request.args.getlist('includedTags[]')
         
         # متغيرات التحكم في الحلقة
         manhwa_list = []
-        current_offset = initial_offset # الأوفست المستخدم للبحث في MangaDex
-        total_manga_count = float('inf') # قيمة مبدئية كبيرة
-        MAX_PAGES_TO_SCAN = 5 # الحد الأقصى لعدد صفحات MangaDex التي سيتم فحصها
+        current_offset = initial_offset 
+        total_manga_count = float('inf') 
+        MAX_PAGES_TO_SCAN = 5 # الحد الأقصى للصفحات التي يمكن فحصها من MangaDex
 
         
-        # الحلقة التكرارية لجلب النتائج
+        # حلقة لجلب ومعالجة النتائج حتى نصل للعدد المطلوب (LIMIT_PER_PAGE)
         for _ in range(MAX_PAGES_TO_SCAN):
             
-            # إذا كنا قد جمعنا بالفعل ما يكفي من النتائج
+            # إذا وصلنا للحد الأقصى للنتائج المطلوبة للعميل
             if len(manhwa_list) >= LIMIT_PER_PAGE:
                 break
             
-            # إذا تجاوزنا إجمالي عدد المانغا
+            # إذا تجاوزنا إجمالي عدد المانجا المتاح
             if current_offset >= total_manga_count:
                 break
             
-            # 1. إعداد بارامترات طلب MangaDex
-            params = {
-                'limit': LIMIT_PER_PAGE, # نطلب 20 نتيجة في كل مرة
-                'offset': current_offset,
-                'order[followedCount]': 'desc',
-                'includes[]': 'cover_art',
-                'hasAvailableChapters': 'true'
-            }
-
-            if status != 'all':
-                params['status[]'] = [status]
-            if content_rating != 'all':
-                params['contentRating[]'] = [content_rating]
-            if demographic != 'all':
-                params['publicationDemographic[]'] = [demographic]
-            if included_tags:
-                params['includedTags[]'] = included_tags
-
-            # 2. إرسال الطلب إلى MangaDex
-            manhwa_response = requests.get(f"{MANGADEX_API_URL}/manga", params=params)
-            manhwa_response.raise_for_status()
-            manhwa_data = manhwa_response.json()
+            # 2. بناء قائمة البارامترات (Key, Value) لطلب MangaDex
+            # **هذا هو التصحيح الرئيسي لخطأ 400**، حيث يتم تمرير القائمة لضمان التكرار الصحيح
             
-            # تحديث الإجمالي الكلي للنتائج
+            query_params = []
+            
+            # بارامترات البحث الأساسية والثابتة
+            query_params.append(('limit', LIMIT_PER_PAGE))
+            query_params.append(('offset', current_offset))
+            query_params.append(('order[followedCount]', 'desc'))
+            query_params.append(('includes[]', 'cover_art'))
+            query_params.append(('hasAvailableChapters', 'true'))
+            
+            # إضافة بارامترات الفلاتر الشرطية (status, rating, demographic)
+            if status != 'all':
+                query_params.append(('status[]', status))
+            if content_rating != 'all':
+                query_params.append(('contentRating[]', content_rating))
+            if demographic != 'all':
+                query_params.append(('publicationDemographic[]', demographic))
+                
+            # إضافة بارامترات التصنيفات (Tags)
+            if included_tags:
+                for tag_id in included_tags:
+                    query_params.append(('includedTags[]', tag_id))
+
+
+            # 3. إرسال الطلب إلى MangaDex
+            manhwa_response = requests.get(f"{MANGADEX_API_URL}/manga", params=query_params, timeout=30)
+            manhwa_response.raise_for_status() # رفع استثناء للردود 4xx/5xx
+
+            manhwa_data = manhwa_response.json()
             total_manga_count = manhwa_data.get('total', 0)
             
-            # 3. معالجة النتائج المستلمة
+            # 4. معالجة النتائج المستلمة وتطبيق فلتر الفصول محلياً
             for manga in manhwa_data.get('data', []):
                 manga_id = manga['id']
                 chapters_num = 0
 
-                # جلب عدد الفصول
+                # جلب عدد الفصول باستخدام aggregation
                 try:
-                    # يجب أن يتم هذا في طلب منفصل، لكن لتجنب إرسال طلب Aggregation في كل مرة
-                    # سنفترض أننا بحاجة لجلب العدد فقط لتطبيق الفلتر القوي
-                    agg_response = requests.get(f"{MANGADEX_API_URL}/manga/{manga_id}/aggregate", params={'translatedLanguage[]': 'en'})
+                    agg_response = requests.get(f"{MANGADEX_API_URL}/manga/{manga_id}/aggregate", params={'translatedLanguage[]': 'en'}, timeout=15)
                     agg_response.raise_for_status()
                     agg_data = agg_response.json()
                     volumes = agg_data.get('volumes', {})
+                    
+                    # حساب أعلى رقم فصل متاح
                     if isinstance(volumes, dict):
                         for vol_data in volumes.values():
                             chapters = vol_data.get('chapters', {})
                             if isinstance(chapters, dict):
-                                # البحث عن أكبر رقم فصل
                                 chapters_num = max(
                                     chapters_num,
                                     max(
@@ -101,34 +119,34 @@ def get_manhwa_data():
                                     )
                                 )
                 except requests.RequestException as e:
+                    # طباعة تحذير وعدم مقاطعة التنفيذ
                     print(f"Warning: Failed to fetch aggregate for {manga_id}: {e}")
-                    pass # استمر إذا فشل الجلب
+                    pass 
 
-                # **فلتر الحد الأدنى للفصول:** يتم تطبيقه هنا
+                # فلتر الحد الأدنى للفصول (يُطبق محلياً)
                 if min_chapters > 0 and chapters_num < min_chapters:
-                    continue # تجاهل هذه المانغا وانتقل للتي تليها
+                    continue 
 
-                # إذا تطابق الفلتر، قم بتجهيز البيانات وإضافتها للقائمة
-                
-                # --- بناء رابط الغلاف ليمر عبر السيرفر Proxy ---
+                # 5. تجهيز بيانات المانهوا (الصور، العناوين، التصنيفات)
                 cover_url = PLACEHOLDER_URL
-                file_name = None
                 cover_art = next((rel for rel in manga.get('relationships', []) if rel.get('type') == 'cover_art'), None)
                 if cover_art:
-                    cover_attributes = cover_art.get('attributes', {})
-                    file_name = cover_attributes.get('fileName')
+                    file_name = cover_art.get('attributes', {}).get('fileName')
                     if file_name:
+                        # إنشاء مسار للـ Proxy على الخادم المحلي
                         cover_url = f"/cover/{initial_offset}/{manga_id}/{file_name}"
 
                 title_en = manga['attributes'].get('title', {}).get('en')
+                # استخدام أول عنوان متاح إذا لم يكن العنوان الإنجليزي موجودًا
                 if not title_en:
-                    title_data = manga['attributes'].get('title', {})
-                    title_val = next(iter(title_data.values()), 'Unknown Title')
+                    title_val = next(iter(manga['attributes'].get('title', {}).values()), 'Unknown Title')
                 else:
                     title_val = title_en
 
+                # استخراج أسماء التصنيفات بالإنجليزية
                 genres_list = [tag['attributes']['name']['en'] for tag in manga.get('attributes', {}).get('tags', [])
                                if tag['attributes']['group'] == 'genre' and 'en' in tag['attributes']['name']]
+                
                 demographic_val = manga['attributes'].get('publicationDemographic', 'none')
                 content_rating_val = manga['attributes'].get('contentRating', 'safe')
 
@@ -140,7 +158,8 @@ def get_manhwa_data():
                     'chaptersNum': chapters_num,
                     'status': manga['attributes'].get('status'),
                     'genres': genres_list,
-                    'rating': manga['attributes'].get('averageRating'),
+                    # تقييم افتراضي
+                    'rating': manga['attributes'].get('averageRating', 0), 
                     'description': manga['attributes'].get('description', {}).get('en'),
                     'demographic': demographic_val,
                     'contentRating': content_rating_val
@@ -149,59 +168,61 @@ def get_manhwa_data():
                 if len(manhwa_list) >= LIMIT_PER_PAGE:
                     break
             
-            # زيادة الأوفست لطلب الصفحة التالية من MangaDex
+            # 6. تحديث الأوفست والانتقال للصفحة التالية من MangaDex
             current_offset += LIMIT_PER_PAGE
             
-            # إضافة تأخير بسيط لمنع حظر IP من MangaDex نتيجة كثرة الطلبات
+            # إضافة تأخير بسيط لمنع حظر IP من MangaDex
             time.sleep(0.1) 
 
 
-        # 4. إرجاع النتائج التي تم جمعها (بحد أقصى 20 نتيجة)
-        # client_offset هو الأوفست الخاص بالصفحة الحالية في المتصفح 
-        # new_offset هو الأوفست للصفحة التالية (بعد النتائج التي تم عرضها الآن)
-        new_offset = client_offset + len(manhwa_list)
-        
-        # تحديد ما إذا كانت هناك نتائج أخرى يمكن جلبها لاحقاً
+        # 7. إرجاع النتائج التي تم تجميعها للعميل
+        new_offset = initial_offset + len(manhwa_list)
+        # تحديد ما إذا كان هناك المزيد من النتائج بناءً على عدد النتائج المستلمة
         has_more = len(manhwa_list) == LIMIT_PER_PAGE
         
         return jsonify({
             'data': manhwa_list,
             'total': total_manga_count,
             'limit': LIMIT_PER_PAGE,
-            'offset': new_offset, # الأوفست الجديد للتحميل اللاحق
+            'offset': new_offset,
             'hasMore': has_more
         })
 
     except requests.exceptions.RequestException as e:
         error_status = e.response.status_code if e.response is not None else 503
-        error_details = f"MangaDex API failed: {error_status}."
+        error_details = f"MangaDex API failed: {error_status}. Check server logs for details."
         print(f"Error fetching data from MangaDex: {error_details}")
+        # إرجاع رسالة خطأ واضحة
         return jsonify({'error': 'Failed to fetch data from external API.', 'details': error_details}), error_status
     except Exception as e:
-        error_message = f"An unexpected error occurred: '{e}'"
+        error_message = f"An unexpected internal server error occurred: {e}"
         print(error_message)
         return jsonify({'error': 'An internal server error occurred.', 'details': error_message}), 500
 
-# دالة get_cover_image تبقى كما هي
+
 @app.route('/cover/<int:request_offset>/<manga_id>/<filename>')
 def get_cover_image(request_offset, manga_id, filename):
     """نقطة نهاية لتقديم صور الغلاف عبر الخادم (Proxy)."""
     
+    # بناء URL الصورة الأصلية بجودة 512 بكسل
     image_url = f"https://uploads.mangadex.org/covers/{manga_id}/{filename}.512.jpg"
     
     try:
+        # طلب الصورة من MangaDex
         image_response = requests.get(image_url, stream=True, timeout=15)
         image_response.raise_for_status()
         
+        # استخراج نوع المحتوى وإرجاع الصورة كاستجابة خام (Response)
         content_type = image_response.headers.get('Content-Type', 'image/jpeg')
         return Response(image_response.iter_content(chunk_size=8192),
                         mimetype=content_type,
                         status=200)
     except requests.RequestException as e:
         print(f"Error proxying cover image {image_url}: {e}")
+        # إرجاع صورة بديلة أو خطأ 404
         return jsonify({'error': 'Image not found or failed to proxy'}), 404
 
-
 if __name__ == '__main__':
+    # الحصول على المنفذ من متغيرات البيئة (عادةً 5000)
     port = int(os.environ.get('PORT', 5000))
     app.run(host='0.0.0.0', port=port, debug=True)
